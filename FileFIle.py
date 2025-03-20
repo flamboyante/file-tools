@@ -13,6 +13,9 @@ from UIClass.BmuConsoleWindow import BmuConsoleWindow
 from UIClass.CanWindow import CanWindow
 from UIClass.FTPWindow import FTPWindow
 from UIClass.ReadWindow import ReadWindow
+
+from UIClass.TableViewWindow import TableView_MainWindow
+
 from USBCAN.ECAN import ECAN, BaudRate, STATUS_OK, CAN_OBJ
 from WorkClass.BmuConsoleThread import BmuConsoleThread
 from new_mainwindows_ui import  Ui_MainWindow
@@ -573,7 +576,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             Action(FluentIcon.POWER_BUTTON, '基带复位', triggered=self.IrRePOWER),
             Action(FluentIcon.SEARCH_MIRROR, '固件版本查询', triggered=self.IrVersionCheck),
             #Action(FluentIcon.MAIL, 'CAN收发', triggered=self.can_window_show),
-            Action(FluentIcon.MAIL, 'FTP',triggered = self.show_FTP_Window )
+            #Action(FluentIcon.MAIL, 'FTP',triggered = self.show_FTP_Window )
+            Action(FluentIcon.MAIL, 'TableView',triggered = self.Table_window_show )
         ])
 
         # 添加始终隐藏的动作
@@ -630,6 +634,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.can_window.setWindowModality(Qt.NonModal)
         self.can_window.show()
 
+
+    def Table_window_show(self):
+        self.table_window = TableView_MainWindow()
+        self.table_window.setWindowModality(Qt.NonModal)
+        self.table_window.show()
     def show_FlashDownWindow(self):
         # 在 MainWindow 类中，当创建 FlashDownWindow 时
         self.flashDownWindow = FlashDownWindow(self)
