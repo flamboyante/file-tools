@@ -1,0 +1,10 @@
+def Close_serial(self):
+        print("Close_serial  thread id is ", threading.currentThread().ident)
+        #if self.ser and self.ser.is_open:
+        if self.ser.is_open:
+            print("close ing ")
+            self.serial_flag_signal.emit(0)  # 发送串口已关闭的信号
+            self.status = 0
+            self.ser.close()
+            print("串口已关闭")
+我把 self.serial_flag_signal.emit(0)  # 发送串口已关闭的信号， self.ser.close()互换会导致主界面点击串口关闭的时候界面卡死，是为什么

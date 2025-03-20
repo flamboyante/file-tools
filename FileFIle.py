@@ -1,0 +1,695 @@
+import datetime
+import sys
+import traceback
+
+import serial
+from PyQt5.QtSerialPort import QSerialPortInfo
+import os
+
+import Media.Media
+
+from PowerControl import PowerControl
+from UIClass.BmuConsoleWindow import BmuConsoleWindow
+from UIClass.CanWindow import CanWindow
+from UIClass.FTPWindow import FTPWindow
+from UIClass.ReadWindow import ReadWindow
+from USBCAN.ECAN import ECAN, BaudRate, STATUS_OK, CAN_OBJ
+from WorkClass.BmuConsoleThread import BmuConsoleThread
+from new_mainwindows_ui import  Ui_MainWindow
+from new_downfile_ui import  Ui_Form
+from logging_config import log_print
+from ycyk_422 import  Ycyk_422_Work
+
+from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import  QFileDialog
+from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox,QWidget,QFrame,QDialog
+from PyQt5.QtCore import QThread, QTimer, Qt, pyqtSignal, QSettings
+from PyQt5.QtGui import  QIcon
+import threading
+import time
+
+from Serial_thread import Serial_Worker, FileTransfer_Work
+
+from qfluentwidgets import (FluentIcon,  Action,)
+
+
+class FlashDownWindow(QDialog, Ui_Form):
+    def __init__(self, parent=None):
+        super(FlashDownWindow, self).__init__(parent)
+        self.setupUi(self)
+        self.setWindowIcon(QIcon('photo/ControlDesk.png'))
+        self.setWindowTitle('FlamFIle')
+
+        log_print("FlashDownWindow thread id is ", threading.currentThread().ident)
+
+        self.PushButton_ChooseFile.clicked.connect(self.openFile)
+        self.PushButton_BeginDown.clicked.connect(self.startFileTransfer)
+        self.PrimaryPushButton_DownFlieInit.clicked.connect(self.InitFileTransfer)
+        self.PushButton_CancelDown.clicked.connect(self.cancelTrans)
+        self.ProgressBar.setValue(0)  # 重置进度条
+
+        self.fileName = None
+        self.fileSize = None
+        self.InitFileTransfer_flag = 0
+        self.FileTransfer_Qthread = None
+
+        self.up_num = 0
+        self.flag = False
+
+        self.mem_value_mapping = {
+            "主": 0x00,
+            "备": 0x01
+        }
+        self.flash_value_mapping = {
+            "KA_PLP0":      [[0x80, 0], [0x81, 0]],
+            "KA_PLP1":      [[0x81, 1], [0x80, 1]],
+            "FNP":          [[0x82, 0], [0x83, 0]],
+            "RESV":         [[0x83, 1], [0x82, 1]],
+            "SC_PLP0":      [[0x84, 0], [0x85, 0]],
+            "SC_PLP1":      [[0x85, 1], [0x84, 1]],
+            "KA_BS0_CPUA":  [[0X8a, 0], [0X8a, 0]],
+            "KA_BS1_CPUA":  [[0X8b, 0], [0X8b, 0]],
+            "KA_BS2_CPUA":  [[0X8c, 0], [0X8c, 0]],
+            "KA_BS3_CPUA":  [[0X8d, 0], [0X8d, 0]],
+            "KA_BS0_CPUB":  [[0X8E, 0], [0X8E, 0]],
+            "KA_BS1_CPUB":  [[0X8F, 0], [0X8F, 0]],
+            "KA_BS2_CPUB":  [[0X90, 0], [0X90, 0]],
+            "KA_BS3_CPUB":  [[0X91, 0], [0X91, 0]],
+            "SC_BS0_CPUA":  [[0X92, 0], [0X92, 0]],
+            "SC_BS1_CPUA":  [[0X93, 0], [0X93, 0]],
+            "SC_BS0_CPUB":  [[0X96, 0], [0X96, 0]],
+            "SC_BS1_CPUB":  [[0X97, 0], [0X97, 0]],
+            "BMU_DIR":      [[0x98, 0], [0x98, 0]],
+            "BMU_UPDATE":   [[0x99, 0], [0x99, 0]],
+            "BMU_GOLDEN":   [[0x9A, 0], [0x9A, 0]],
+            "KA TX":        [[0xc0, 0], [0xc0, 0]],
+            "KA RX":        [[0XC1, 0], [0XC1, 0]],
+            "SC":           [[0XC2, 0], [0XC2, 0]]
+        }
+
+        self.Init_FlashWindow()
+
+    def Init_FlashWindow(self):
+        self.ComboBox_Flash.addItems(self.flash_value_mapping.keys())
+        self.ComboBox_Mem.addItems(self.mem_value_mapping.keys())
+        self.ComboBox_Mem.setCurrentIndex(0)
+        self.ComboBox_Flash.setCurrentIndex(0)
+        self.PushButton_CancelDown.setText('暂停下载')
+        self.PushButton_CancelDown.setEnabled(False)
+
+    def InitFileTransfer(self):
+        if self.mainWindow.Serial_Worker.status and not self.FileTransfer_Qthread:
+            self.FileTransfer_Worker = FileTransfer_Work(self.mainWindow.Serial_Worker)
+            self.FileTransfer_Qthread = QThread()
+            self.FileTransfer_Worker.moveToThread(self.FileTransfer_Qthread)  # 将 SerialFileTransfer 移动到新线程
+            # 启动线程
+            self.FileTransfer_Worker.file_start_signal.connect(self.FileTransfer_Worker.file_start_slot)
+            self.FileTransfer_Worker.file_processe_signal.connect(self.updateProgressBar)
+            self.FileTransfer_Worker.file_complete_signal.connect(self.CompleteFileTransfer)
+            self.FileTransfer_Worker.file_log_signal.connect(self.log_file_transfer)
+            self.FileTransfer_Worker.file_exception_signal.connect(self.exception_show)
+
+            self.FileTransfer_Qthread.start()
+            self.InitFileTransfer_flag = 1
+
+            return
+        elif not self.mainWindow.Serial_Worker.status:
+            QMessageBox.warning(self, "警告", "串口通信未初始化,请重新操作")
+            return
+        else:
+            QMessageBox.warning(self, "警告", "已初始化,请勿重新操作")
+            return
+
+    def openFile(self):
+        # 打开文件对话框并获取文件路径
+        log_print("openFiler thread id is ", threading.currentThread().ident)
+        self.fileName, _ = QFileDialog.getOpenFileName(self, "Open File", "", "All Files (*);;Text Files (*.txt)")
+        if self.fileName:
+            self.fileSize = os.path.getsize(self.fileName)  # 获取文件大小
+            log_print("fileSize:", self.fileSize)
+            self.LineEdit_FliePath.setText(self.fileName)
+
+    def startFileTransfer(self):
+        # 检查串口通信是否正常
+        log_print("startFileTransfer thread id is ", threading.currentThread().ident)
+
+        if self.InitFileTransfer_flag != 1:
+            QMessageBox.warning(self, "警告", "文件传输未初始化，无法进行文件传输。")
+            return
+
+        if self.fileName is None:
+            QMessageBox.warning(self, "警告", "未选取正确文件")
+            return
+
+        mem_key = self.ComboBox_Mem.currentText()
+        if not mem_key:
+            QMessageBox.warning(self, "警告", "未选取mem部件")
+            return
+        else:
+            log_print(mem_key)
+            mem_value = self.mem_value_mapping.get(mem_key)
+            if mem_value is None:
+                QMessageBox.warning(self, "警告", "未知mem部件")
+                return
+            log_print(hex(mem_value))
+
+        flash_key = self.ComboBox_Flash.currentText()
+        if not flash_key:
+            QMessageBox.warning(self, "警告", "未选取flash部件")
+            return
+        else:
+            log_print(flash_key)
+            flash_value = self.flash_value_mapping.get(flash_key)
+            if flash_value is None:
+                QMessageBox.warning(self, "警告", "未知flash部件")
+                return
+            log_print(flash_value)
+            flash, address = flash_value[mem_value]
+            log_print(flash_value, hex(flash), hex(address))
+
+        self.ProgressBar.setValue(0)  # 重置进度条
+        self.TextEdit_DownPrint.append("erase flash ing ,please wait")
+        self.FileTransfer_Worker.file_start_signal.emit(self.fileName, flash, address)
+        self.PushButton_BeginDown.setEnabled(False)
+        self.PushButton_CancelDown.setText('暂停下载')
+        self.PushButton_CancelDown.setEnabled(True)
+        self.flag = True
+
+    def CompleteFileTransfer(self):
+        self.ProgressBar.setValue(100)
+        time.sleep(1)
+        self.PushButton_CancelDown.setEnabled(False)
+        #self.mainWindow.Serial_Worker.resume_serial_reader_signal.emit()
+        QMessageBox.information(self, "打开普通串口", "文件下载成功,新版本开始运行")
+        self.PushButton_BeginDown.setEnabled(True)
+
+
+    def cancelTrans(self):
+        if self.flag:
+            self.FileTransfer_Worker.send_pause()
+            self.PushButton_CancelDown.setText('继续下载')
+            self.flag = False
+
+        else:
+            self.FileTransfer_Worker.send_resume()
+            self.PushButton_CancelDown.setText('暂停下载')
+            self.flag = True
+        pass
+
+    def updateProgressBar(self, transferredSize):
+        #self.TextEdit_DownPrint.append('当前段:', transferredSize + 1)
+        if self.fileSize > 0:  # 确保文件大小大于0
+            self.ProgressBar.setValue(int(transferredSize / self.fileSize * 100))  # 计算并设置百分比
+        else:
+            self.ProgressBar.setValue(0)  # 如果文件大小为0，则重置进度条
+
+    def log_file_transfer(self, text: str):
+        try:
+            self.TextEdit_DownPrint.append(text)
+        except Exception as e:
+            log_print(e)
+
+    def exception_show(self, e: Exception, trace: str):
+        QMessageBox.warning(self, f'异常: {str(e)}', trace)
+
+
+# 主界面
+class MainWindow(QMainWindow, Ui_MainWindow):
+    def __init__(self, parent=None):
+        super(MainWindow, self).__init__(parent)
+        self.bmu_debug_window = None
+        self.setupUi(self)
+        self.setWindowIcon(QIcon('photo/computer.png'))
+        self.setWindowTitle('FlamSerial')
+        self.statusbar.hide()
+        self.mainWindowsInit()
+
+        log_print("new frame thread id is ", threading.currentThread().ident)
+
+        self.Ycyk_Worker = Ycyk_422_Work()
+        self.serial_bmu_flag = False
+
+        # self.Ycyk_Worker.send_heart()
+
+        # 多线程
+        self.Serial_QThread = QThread()
+        self.Serial_Worker = Serial_Worker()
+        self.Serial_Worker.moveToThread(self.Serial_QThread)  # 修正了拼写错误
+
+        self.Serial_Worker.show_error_signal.connect(self.show_error_dialog)
+        self.Serial_Worker.serial_flag_signal.connect(self.show_serial_status)
+        self.Serial_Worker.Sign_Serial_init.connect(self.Serial_Worker.init_media)  # 连接信号和槽
+
+        self.Serial_QThread.start()
+
+        self.bmu_debug_thread = None    # Type:BmuConsoleThread
+
+        self.port_name = []
+        self.time_scan = QTimer()
+        self.time_scan.timeout.connect(self.Timer_Serial_Scan)
+        self.time_scan.start(1000)
+
+        # 添加您自己的代码来操作控件
+        self.PrimaryPushButton_OpenSerial.clicked.connect(self.open_serial)
+        self.primaryPushBtn_ethConnect.clicked.connect(self.connect_net)
+        self.PrimaryPushButton_OpenSerialBmu.clicked.connect(self.open_serial_bmu)
+        self.power_btn_list = self.tabWidget.currentWidget().findChildren(QtWidgets.QPushButton)
+
+    def Timer_Serial_Scan(self):
+        all_port = QSerialPortInfo.availablePorts()
+        new_port = []
+        for port in all_port:
+            new_port.append(port.portName())
+        if len(self.port_name) != len(new_port):
+            log_print(self.port_name)
+            self.port_name = new_port
+            log_print(self.port_name)
+            self.comboBox_SerialSel.clear()
+            self.comboBox_SerialSel.addItems(self.port_name)
+            self.comboBox_SerialSelBmu.clear()
+            self.comboBox_SerialSelBmu.addItems(self.port_name)
+
+    def open_serial(self):
+        log_print("按下open serial按钮")
+
+        com_port = self.comboBox_SerialSel.currentText()
+        baud_rate = int(self.comboBox_byterate.currentText())
+        data_bits = int(self.comboBox_data_bit.currentText())
+        stop_bits = self.comboBox_stop_bit.currentText()
+        parity_check = self.comboBox_checkbit.currentText()
+
+        if self.Serial_Worker.status == 0:
+            # 发出信号，传递数据到工作线程
+            self.Enable_ComboBox_Controls(False)
+            self.tab_eth.setDisabled(True)
+            self.Serial_Worker.Sign_Serial_init.emit(Media.Media.MediaType.SERIAL, com_port, baud_rate, data_bits, stop_bits, parity_check)
+            # self.heart_timer.start(3000)
+        else:
+            self.Enable_ComboBox_Controls(True)
+            self.tab_eth.setEnabled(True)
+            self.Serial_Worker.close_serial()
+
+    def connect_net(self):
+        log_print("按下建立连接按钮")
+        try:
+            ver = self.comboBox_ethIPVer.currentText()
+            ip = self.comboBox_ethIpAddr.currentText()
+            port = self.comboBox_ethPort.currentText()
+            log_print("ver:", ver, 'ip:', ip, 'port:', port)
+            log_print("port:", int(port))
+
+            if self.Serial_Worker.status == 0:
+                self.Enable_ComboBox_Controls(False)
+                self.tab_serial.setDisabled(True)
+                # port.encode('utf-8')
+                self.Serial_Worker.Sign_Serial_init.emit(Media.Media.MediaType.ETHERNET, ip, int(port), 0, '', '')
+            else:
+                self.Enable_ComboBox_Controls(True)
+                self.tab_serial.setEnabled(True)
+                self.Serial_Worker.close_serial()
+        except Exception as e:
+            print(e)
+
+    def open_serial_bmu(self):
+        log_print("按下open serial bmu按钮")
+
+        try:
+            if self.serial_bmu_flag is False:
+                # 获取串口参数
+                com_port = self.comboBox_SerialSelBmu.currentText()
+                baud_rate = int(self.comboBox_baud_bmu.currentText())
+                data_bits = int(self.comboBox_data_bit_bmu.currentText())
+                stop_bits = self.comboBox_stop_bit_bmu.currentText()
+                parity_check = self.comboBox_parity_bmu.currentText()
+
+                serial_dict = {'NONE': serial.PARITY_NONE, 'EVEN': serial.PARITY_EVEN, 'ODD': serial.PARITY_ODD,
+                               '1': serial.STOPBITS_ONE, '2': serial.STOPBITS_TWO,
+                               '1.5': serial.STOPBITS_ONE_POINT_FIVE}
+
+                parity = serial_dict.get(parity_check)
+                if parity is None:
+                    raise ValueError("Invalid parity check value")
+                stop_bit = serial_dict.get(stop_bits)
+                if stop_bit is None:
+                    raise ValueError("Invalid stop bits value")
+
+                # 创建串口接收线程
+                self.bmu_debug_thread = BmuConsoleThread(com_port, baud_rate, data_bits, stop_bit, parity)
+                self.bmu_debug_thread.signal_console_input.connect(self.set_bmu_console_info)
+                self.bmu_debug_thread.signal_console_break.connect(self.bmu_console_break)
+                self.bmu_debug_thread.start()
+                self.serial_bmu_flag = True
+                self.set_power_button_red(self.pushButton_BS0)
+                self.set_power_button_red(self.pushButton_BS1)
+                self.set_power_button_red(self.pushButton_BS2)
+                self.set_power_button_red(self.pushButton_BS3)
+                self.set_power_button_red(self.pushButton_COD0)
+                self.set_power_button_red(self.pushButton_COD1)
+                self.set_power_button_red(self.pushButton_SW0)
+                self.set_power_button_red(self.pushButton_SC_BS4)
+                self.set_power_button_red(self.pushButton_SC_BS5)
+                self.set_power_button_red(self.pushButton_SC_COD0)
+                self.set_power_button_red(self.pushButton_SC_COD1)
+                self.set_power_button_red(self.pushButton_Gate)
+                self.PrimaryPushButton_OpenSerialBmu.setText('关闭串口')
+            else:
+                self.bmu_debug_thread.stop()
+                self.bmu_debug_thread = None
+                self.serial_bmu_flag = False
+                self.set_power_button_gray(self.pushButton_BS0)
+                self.set_power_button_gray(self.pushButton_BS1)
+                self.set_power_button_gray(self.pushButton_BS2)
+                self.set_power_button_gray(self.pushButton_BS3)
+                self.set_power_button_gray(self.pushButton_COD0)
+                self.set_power_button_gray(self.pushButton_COD1)
+                self.set_power_button_gray(self.pushButton_SW0)
+                self.set_power_button_gray(self.pushButton_SC_BS4)
+                self.set_power_button_gray(self.pushButton_SC_BS5)
+                self.set_power_button_gray(self.pushButton_SC_COD0)
+                self.set_power_button_gray(self.pushButton_SC_COD1)
+                self.set_power_button_gray(self.pushButton_Gate)
+                self.PrimaryPushButton_OpenSerialBmu.setText('打开串口')
+        except Exception as e:
+            if self.bmu_debug_thread:
+                self.bmu_debug_thread = None
+            QMessageBox.critical(self, '串口错误', f'{e}')
+            log_print('open_serial_bmu:', e)
+
+    def set_bmu_console_info(self, txt):
+        if self.bmu_debug_window is not None:
+            self.bmu_debug_window.output(txt)
+
+    def bmu_console_break(self, emsg):
+        QMessageBox.information(self, '串口中断', emsg)
+        try:
+            self.bmu_debug_thread.stop()
+            self.bmu_debug_thread = None
+            self.serial_bmu_flag = False
+            self.set_power_button_gray(self.pushButton_BS0)
+            self.set_power_button_gray(self.pushButton_BS1)
+            self.set_power_button_gray(self.pushButton_BS2)
+            self.set_power_button_gray(self.pushButton_BS3)
+            self.set_power_button_gray(self.pushButton_COD0)
+            self.set_power_button_gray(self.pushButton_COD1)
+            self.set_power_button_gray(self.pushButton_SW0)
+            self.set_power_button_gray(self.pushButton_SC_BS4)
+            self.set_power_button_gray(self.pushButton_SC_BS5)
+            self.set_power_button_gray(self.pushButton_SC_COD0)
+            self.set_power_button_gray(self.pushButton_SC_COD1)
+            self.set_power_button_gray(self.pushButton_Gate)
+            self.PrimaryPushButton_OpenSerialBmu.setText('打开串口')
+        except Exception as e:
+            QMessageBox.critical(self, '串口错误', str(e))
+
+    def send_bmu_cmd(self, cmd: str):
+        log_print(cmd)
+        if self.bmu_debug_thread is None:
+            QMessageBox.information(self, '串口未打开', '')
+            return
+        self.bmu_debug_thread.send(cmd)
+
+    def Enable_ComboBox_Controls(self, flag):
+        if self.tabWidget_Media.currentIndex() is 0:
+            if flag:
+                self.comboBox_SerialSel.setEnabled(True)
+                self.comboBox_byterate.setEnabled(True)
+                self.comboBox_data_bit.setEnabled(True)
+                self.comboBox_stop_bit.setEnabled(True)
+                self.comboBox_checkbit.setEnabled(True)
+            else:
+                # 禁用控件
+                self.comboBox_SerialSel.setEnabled(False)
+                self.comboBox_byterate.setEnabled(False)
+                self.comboBox_data_bit.setEnabled(False)
+                self.comboBox_stop_bit.setEnabled(False)
+                self.comboBox_checkbit.setEnabled(False)
+        else:
+            if flag:
+                self.comboBox_ethIPVer.setEnabled(True)
+                self.comboBox_ethIpAddr.setEnabled(True)
+                self.comboBox_ethPort.setEnabled(True)
+            else:
+                self.comboBox_ethIPVer.setEnabled(False)
+                self.comboBox_ethIpAddr.setEnabled(False)
+                self.comboBox_ethPort.setEnabled(False)
+
+
+    def show_error_dialog(self, error_message):
+        # 这个槽函数会在主线程中调用，因此可以安全地操作 GUI
+        QMessageBox.critical(self, '串口错误', error_message)
+
+    def show_serial_status(self, flag):
+        if self.tabWidget_Media.currentIndex() is 0:
+            if flag == 1:
+                self.PrimaryPushButton_OpenSerial.setText("关闭串口")
+            elif flag == 0:
+                self.PrimaryPushButton_OpenSerial.setText("打开串口")
+        else:
+            if flag == 1:
+                self.primaryPushBtn_ethConnect.setText("断开连接")
+            elif flag == 0:
+                self.primaryPushBtn_ethConnect.setText("建立连接")
+
+    def switch_power_btn(self, btn):
+        if self.bmu_debug_thread is None:
+            QMessageBox.information(self, '提示', '串口未打开')
+            return
+        key = btn.text()
+        try:
+            status = PowerControl.get_power_status(key)
+            if status is not None:
+                if status is True:
+                    cmd = PowerControl.get_power_off_cmd(key)
+                    self.bmu_debug_thread.send('8')
+                    if self.bmu_debug_window is not None:
+                        self.bmu_debug_window.output('8\r')
+                    time.sleep(0.1)
+                    self.bmu_debug_thread.send(cmd)
+                    if self.bmu_debug_window is not None:
+                        self.bmu_debug_window.output(cmd)
+                    PowerControl.set_power_status(key, False)
+                    self.set_power_button_red(btn)
+                else:
+                    cmd = PowerControl.get_power_on_cmd(key)
+                    self.bmu_debug_thread.send('8')
+                    if self.bmu_debug_window is not None:
+                        self.bmu_debug_window.output('8\r')
+                    time.sleep(0.1)
+                    self.bmu_debug_thread.send(cmd)
+                    if self.bmu_debug_window is not None:
+                        self.bmu_debug_window.output(cmd)
+                    PowerControl.set_power_status(key, True)
+                    self.set_power_button_green(btn)
+        except Exception as e:
+            log_print(e)
+
+    def power_on_off_bs0(self):
+        self.switch_power_btn(self.pushButton_BS0)
+
+    def power_on_off_bs1(self):
+        self.switch_power_btn(self.pushButton_BS1)
+
+    def power_on_off_bs2(self):
+        self.switch_power_btn(self.pushButton_BS2)
+
+    def power_on_off_bs3(self):
+        self.switch_power_btn(self.pushButton_BS3)
+
+    def power_on_off_cod0(self):
+        self.switch_power_btn(self.pushButton_COD0)
+
+    def power_on_off_cod1(self):
+        self.switch_power_btn(self.pushButton_COD1)
+
+    def power_on_off_sw0(self):
+        self.switch_power_btn(self.pushButton_SW0)
+
+    def power_on_off_sc_bs4(self):
+        self.switch_power_btn(self.pushButton_SC_BS4)
+
+    def power_on_off_sc_bs5(self):
+        self.switch_power_btn(self.pushButton_SC_BS5)
+
+    def power_on_off_sc_cod0(self):
+        self.switch_power_btn(self.pushButton_SC_COD0)
+
+    def power_on_off_sc_cod1(self):
+        self.switch_power_btn(self.pushButton_SC_COD1)
+
+    def power_on_off_gate(self):
+        self.switch_power_btn(self.pushButton_Gate)
+
+    def set_power_button_gray(self, btn: QtWidgets.QPushButton):
+        btn.setStyleSheet('''QPushButton{background-color:rgb(128,128,128)}''')
+
+    def set_power_button_red(self, btn: QtWidgets.QPushButton):
+        btn.setStyleSheet('''QPushButton{background-color:rgb(255,0,0)}''')
+
+    def set_power_button_green(self, btn: QtWidgets.QPushButton):
+        btn.setStyleSheet('''QPushButton{background-color:rgb(0,255,0)}''')
+
+    def mainWindowsInit(self):
+
+        #comboBox_SerialSel
+        self.comboBox_SerialSel.setPlaceholderText("选择串口")
+        self.comboBox_byterate.setPlaceholderText("选择波特率")
+
+        self.comboBox_data_bit.setPlaceholderText("选择数据位")
+        self.comboBox_checkbit.setPlaceholderText("选择校验位")
+        self.comboBox_stop_bit.setPlaceholderText("选择停止位")
+        self.comboBox_byterate.addItems(['115200', '9600', '921600', '4000000', '2000000'])
+        self.comboBox_data_bit.addItems(['6', '7', '8'])
+        self.comboBox_stop_bit.addItems(['1', '1.5', '2'])
+        self.comboBox_checkbit.addItems(['NONE', 'ODD', 'EVEN'])
+        self.comboBox_data_bit.setCurrentIndex(2)
+        self.comboBox_checkbit.setCurrentIndex(1)
+
+        self.comboBox_baud_bmu.setPlaceholderText("选择波特率")
+        self.comboBox_baud_bmu.addItems(['115200', '9600', '921600', '4000000', '2000000'])
+        self.comboBox_baud_bmu.setCurrentIndex(2)
+
+        self.comboBox_data_bit_bmu.setPlaceholderText("选择数据位")
+        self.comboBox_data_bit_bmu.addItems(['6', '7', '8'])
+        self.comboBox_data_bit_bmu.setCurrentIndex(2)
+
+        self.comboBox_stop_bit_bmu.setPlaceholderText("选择停止位")
+        self.comboBox_stop_bit_bmu.addItems(['1', '1.5', '2'])
+        self.comboBox_stop_bit_bmu.setCurrentIndex(0)
+
+        self.comboBox_parity_bmu.setPlaceholderText("选择校验位")
+        self.comboBox_parity_bmu.addItems(['NONE', 'ODD', 'EVEN'])
+        self.comboBox_parity_bmu.setCurrentIndex(1)
+
+        self.CommandBar.addAction(Action(FluentIcon.ADD, '添加', triggered=lambda: log_print("添加")))
+
+        # 添加分隔符
+        self.CommandBar.addSeparator()
+
+        # 批量添加动作
+        self.CommandBar.addActions([
+            Action(FluentIcon.CONNECT, '控制台', triggered=self.show_bmu_console_window),
+            Action(FluentIcon.DOWNLOAD, '版本重构', triggered=self.show_FlashDownWindow),
+            Action(FluentIcon.ROBOT, '版本读取', triggered=self.show_FlashReadWindow),
+            Action(FluentIcon.POWER_BUTTON, '基带复位', triggered=self.IrRePOWER),
+            Action(FluentIcon.SEARCH_MIRROR, '固件版本查询', triggered=self.IrVersionCheck),
+            #Action(FluentIcon.MAIL, 'CAN收发', triggered=self.can_window_show),
+            Action(FluentIcon.MAIL, 'FTP',triggered = self.show_FTP_Window )
+        ])
+
+        # 添加始终隐藏的动作
+        self.CommandBar.addHiddenAction(Action(FluentIcon.SCROLL, '排序', triggered=lambda: log_print('排序')))
+        self.CommandBar.addHiddenAction(Action(FluentIcon.SETTING, '设置'))
+
+        # 初始化Button为灰色
+        self.set_power_button_gray(self.pushButton_BS0)
+        self.set_power_button_gray(self.pushButton_BS1)
+        self.set_power_button_gray(self.pushButton_BS2)
+        self.set_power_button_gray(self.pushButton_BS3)
+        self.set_power_button_gray(self.pushButton_COD0)
+        self.set_power_button_gray(self.pushButton_COD1)
+        self.set_power_button_gray(self.pushButton_SW0)
+        self.set_power_button_gray(self.pushButton_SC_BS4)
+        self.set_power_button_gray(self.pushButton_SC_BS5)
+        self.set_power_button_gray(self.pushButton_SC_COD0)
+        self.set_power_button_gray(self.pushButton_SC_COD1)
+        self.set_power_button_gray(self.pushButton_Gate)
+
+        self.pushButton_BS0.clicked.connect(self.power_on_off_bs0)
+        self.pushButton_BS1.clicked.connect(self.power_on_off_bs1)
+        self.pushButton_BS2.clicked.connect(self.power_on_off_bs2)
+        self.pushButton_BS3.clicked.connect(self.power_on_off_bs3)
+        self.pushButton_COD0.clicked.connect(self.power_on_off_cod0)
+        self.pushButton_COD1.clicked.connect(self.power_on_off_cod1)
+        self.pushButton_SW0.clicked.connect(self.power_on_off_sw0)
+        self.pushButton_SC_BS4.clicked.connect(self.power_on_off_sc_bs4)
+        self.pushButton_SC_BS5.clicked.connect(self.power_on_off_sc_bs5)
+        self.pushButton_SC_COD0.clicked.connect(self.power_on_off_sc_cod0)
+        self.pushButton_SC_COD1.clicked.connect(self.power_on_off_sc_cod1)
+        self.pushButton_Gate.clicked.connect(self.power_on_off_gate)
+
+    def IrRePOWER(self):
+        if not self.Serial_Worker.status:
+            QMessageBox.warning(self, "警告", "通信未初始化,请重新操作")
+            return
+        else:
+            IR_reboot_byte = self.Ycyk_Worker.Send_Reboot()
+            self.Serial_Worker.media.send(IR_reboot_byte)
+            log_print("-------------复位遥控指令已经发送成功,-----------")
+
+    def IrVersionCheck(self):
+        if not self.Serial_Worker.status:
+            QMessageBox.warning(self, "警告", "通信未初始化,请重新操作")
+            return
+        else:
+            IR_VersionCheck_byte = self.Ycyk_Worker.Send_VersionCheck()
+            self.Serial_Worker.media.send(IR_VersionCheck_byte)
+            log_print("-------------固件版本查询遥控指令已经发送成功-----------")
+
+    def can_window_show(self):
+        self.can_window = CanWindow()
+        self.can_window.setWindowModality(Qt.NonModal)
+        self.can_window.show()
+
+    def show_FlashDownWindow(self):
+        # 在 MainWindow 类中，当创建 FlashDownWindow 时
+        self.flashDownWindow = FlashDownWindow(self)
+        self.flashDownWindow.mainWindow = self  # 设置 FlashDownWindow 的父窗口引用
+        self.flashDownWindow.setWindowModality(Qt.NonModal)
+        self.flashDownWindow.show()
+
+    # 显示BMU控制台窗口
+    def show_bmu_console_window(self):
+        # if self.serial_bmu is None or self.serial_bmu.is_open is False:
+        #     QMessageBox.information(self, '提示', '串口未打开')
+        #     return
+        self.bmu_debug_window = BmuConsoleWindow()
+        self.bmu_debug_window.mainWindow = self
+        self.bmu_debug_window.setWindowModality(Qt.NonModal)
+        self.bmu_debug_window.signal_input_enter.connect(self.send_bmu_cmd)
+        self.bmu_debug_window.show()
+
+    def show_FlashReadWindow(self):
+        # 在 MainWindow 类中，当创建 FlashDownWindow 时
+        self.flashReadWindow = ReadWindow(self)
+        self.flashReadWindow.mainWindow = self  # 设置 FlashDownWindow 的父窗口引用
+        self.flashReadWindow.show()
+
+    def show_FTP_Window(self):
+        self.FTPWindow = FTPWindow(self)
+        self.FTPWindow.serFTP = self.Serial_Worker.media  # 设置 FlashDownWindow 的父窗口引用
+        self.FTPWindow.show()
+
+    def hellp(self):
+        log_print("hello")
+
+# def sendcan1():
+#     canobj = CAN_OBJ()
+#     canobj.ID = 0x31801
+#     canobj.DataLen = 3
+#     canobj.data[0] = 0x00
+#     canobj.data[1] = 0xaa
+#     canobj.data[2] = 0xaa
+#     canobj.data[3] = 0x00
+#     canobj.data[4] = 0x00
+#     canobj.data[5] = 0x00
+#     canobj.data[6] = 0x00
+#     canobj.data[7] = 0x00
+#     canobj.RemoteFlag = 0
+#     canobj.ExternFlag = 1
+#     ecan.transmit(canobj)
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    app.setStyle('Fusion')
+    myWin = MainWindow()
+    myWin.show()
+    sys.exit(app.exec_())
+
+
+'''
+    def show_FlashDownWindow(self):
+        # 在 MainWindow 类中，当创建 FlashDownWindow 时
+        self.flashDownWindow = FlashDownWindow(self)
+        self.flashDownWindow.mainWindow = self  # 设置 FlashDownWindow 的父窗口引用
+        self.flashDownWindow.show()
+'''

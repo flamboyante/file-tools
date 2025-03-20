@@ -1,0 +1,60 @@
+### Python ###
+# 编译文件和缓存
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+*.egg
+.pytest_cache/
+
+# 虚拟环境和包目录
+venv/
+env/
+pip-selfcheck.json
+
+# 构建和分发目录
+build/
+dist/
+*.exe
+
+
+### PyQt5 相关 ###
+# 忽略由 `pyuic5` 生成的UI代码（若需保留生成的 *_ui.py，请注释下一行）
+#*_ui.py
+
+# 忽略Qt Designer的临时文件（保留原始的 .ui 文件）
+*.ui~
+*.autosave
+
+# 忽略资源文件编译结果（.qrc生成的_rc.py）
+#*_rc.py
+
+
+### IDE和编辑器 ###
+# PyCharm
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+
+### 系统文件 ###
+.DS_Store
+Thumbs.db
+
+
+### 日志和数据库 ###
+*.log
+*.sqlite
+*.db
+
+
+### 本地环境文件 ###
+.env
+.env.local
