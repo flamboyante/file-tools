@@ -636,9 +636,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
 
     def Table_window_show(self):
-        self.table_window = TableView_MainWindow()
-        self.table_window.setWindowModality(Qt.NonModal)
-        self.table_window.show()
+        try:
+            self.table_window = TableView_MainWindow()
+            self.table_window.setWindowModality(Qt.NonModal)
+            self.table_window.show()
+        except Exception as e:
+            log_print(f"TableView_MainWindow初始化失败:{e}")
     def show_FlashDownWindow(self):
         # 在 MainWindow 类中，当创建 FlashDownWindow 时
         self.flashDownWindow = FlashDownWindow(self)

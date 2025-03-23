@@ -14,14 +14,20 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(796, 448)
+        MainWindow.resize(796, 728)
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
-        self.horizontalLayout = QtWidgets.QHBoxLayout(self.centralwidget)
-        self.horizontalLayout.setObjectName("horizontalLayout")
-        self.tableView = QtWidgets.QTableView(self.centralwidget)
+        self.demo_table_simple = SiTableView(self.centralwidget)
+        self.demo_table_simple.setGeometry(QtCore.QRect(20, 430, 741, 221))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.demo_table_simple.sizePolicy().hasHeightForWidth())
+        self.demo_table_simple.setSizePolicy(sizePolicy)
+        self.demo_table_simple.setObjectName("demo_table_simple")
+        self.tableView = HkjTableView(self.centralwidget)
+        self.tableView.setGeometry(QtCore.QRect(79, 14, 631, 291))
         self.tableView.setObjectName("tableView")
-        self.horizontalLayout.addWidget(self.tableView)
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 796, 26))
@@ -37,3 +43,5 @@ class Ui_MainWindow(object):
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "但是风好大发动机号"))
+from HkjView.HkjTableView import HkjTableView
+from siui.components.widgets.table import SiTableView
