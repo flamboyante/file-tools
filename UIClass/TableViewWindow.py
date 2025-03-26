@@ -35,7 +35,7 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
 
             self.set_table_init()
 
-            self.init_siui_table()
+            #self.init_siui_table()
         except Exception as e:
             log_print(f"TableView_MainWindow __init__: {str(e)}")
 
@@ -101,41 +101,18 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
             log_print(f"set_data error: {str(e)}")
 
 
-
-
-    def init_siui_table(self):
-        ###############################
-
-        self.demo_table_simple.resize(752, 360)
-
-        self.demo_table_simple.addColumn("歌曲名", 190, 40, Qt.AlignLeft | Qt.AlignVCenter)
-        self.demo_table_simple.addColumn("歌手", 160, 40, Qt.AlignLeft | Qt.AlignVCenter)
-        self.demo_table_simple.addColumn("专辑", 240, 40, Qt.AlignLeft | Qt.AlignVCenter)
-        self.demo_table_simple.addColumn("时长", 64, 40, Qt.AlignRight | Qt.AlignVCenter)
-
-        self.demo_table_simple.addRow(data=["どうして", "高瀬統也", "どうして (feat. 野田愛実)", "03:01"])
-        """
-        self.demo_table_simple.addRow(data=["風色Letter", "水瀬いのり", "glow", "04:38"])
-        self.demo_table_simple.addRow(data=["ステンドノクターン", "初音ミク", "ステンドノクターン", "03:39"])
-        self.demo_table_simple.addRow(data=["鯖鯖", "山崎あおい", "鯖鯖", "05:06"])
-        self.demo_table_simple.addRow(data=["優しい恋人", "しまも", "優しい恋人", "05:42"])
-        self.demo_table_simple.addRow(data=["Summer Dream", "Kirara Magic", "Summer Dream (feat. Chevy)", "03:36"])
-        self.demo_table_simple.addRow(data=["RPG", "Lefty Hand Cream", "Lefty Hand Covers Ⅱ", "04:16"])
-        self.demo_table_simple.addRow(data=["The des Alizes", "Foxtail-Grass Studio", "Re*Collection", "03:40"])
-        self.demo_table_simple.addRow(data=["他追着风", "霏泠Ice", "他追着风", "04:39"])
-        self.demo_table_simple.addRow(data=["ちるちる", "REOL", "Σ", "03:17"])
-        self.demo_table_simple.addRow(data=["展 / Re: Expansion", "RABPIT", "序章: 弥卢", "04:00"])
-        self.demo_table_simple.addRow(
-            data=["Never Gonna Give You Up", "Rick Astley", "Whenever You Need Somebody", "03:34"])
-        """
-        '''
-        self.table_simple.body().setAdjustWidgetsSize(True)
-        self.table_simple.body().addWidget(self.demo_table_simple)
-        self.table_simple.body().addPlaceholder(12)
-        self.table_simple.adjustSize()
-        '''
-    ##############################################################
-
-
+    def show_parsed_data(self, hex_data):
+        try:
+            # 解析数据
+            parsed_data = self.execler.parse_can_data(hex_data)
+            # 填充数据到第二列
+            for row_idx, data in enumerate(parsed_data):
+                value = str(data["value"])
+                value_item = QStandardItem(value)
+                value_item.setTextAlignment(Qt.AlignCenter)
+                # 如果当前行存在则更新第二列数据，不存在则添加新行
+                self.model.setItem(row_idx, 1, value_item)  # 第一列
+        except Exception as e:
+            log_print(f"显示数据出错: {str(e)}")
 
 

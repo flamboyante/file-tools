@@ -72,6 +72,28 @@ class Model_Excel_Task():
 
 
 
+    def parse_can_data(self, hex_data):
+        """
+        根据 Excel 中的字段信息解析 CAN 数据
+        :param hex_data: 十六进制字符串形式的 CAN 数据
+        :return: 解析结果列表
+        """
+        try:
+            log_print("parse_can_datais",hex_data)
+            binary_data = bin(int(hex_data.replace(" ", ""), 16))[2:].zfill(len(hex_data.replace(" ", "")) * 4)
+            parsed_data = []
+            for field in self.fields:
+                start = field["start_bits"]
+                end = start + field["bits"]
+                value = int(binary_data[start:end], 2)
+                parsed_data.append({
+                    "name": field["name"],
+                    "value": value
+                })
+            log_print("parsed_data is",parsed_data)
+            return parsed_data
+        except Exception as e:
+            log_print(f"parse_can_data 显示数据出错: {str(e)}")
 
 
 

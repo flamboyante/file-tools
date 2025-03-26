@@ -8,8 +8,9 @@ from JiangCan_Tools.ECAN import ECAN, STATUS_OK, BaudRate
 from logging_config import  log_print
 
 from JiangCan_Tools.JiangCan import JCANThread
+from Can_Frame_Deal.Model_Data import HexDataDeal
 
-
+from UIClass.TableViewWindow import TableView_MainWindow
 class CanWindow(QDialog, can_ui.Ui_CanForm):
     def __init__(self, parent=None):
         super(CanWindow, self).__init__(parent)
@@ -34,8 +35,10 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
 
         self.pushButton_Open.clicked.connect(self.open_dev)
         self.pushButton_Send.clicked.connect(self.send_005a5a_test)
+        self.pushButton_Close.clicked.connect(self.open_table_view)
 
         self.can_recv_thread = None
+        self.can_tableview = None
 
     def open_dev(self):
         try:
@@ -88,14 +91,37 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
 
 
     def Start_CAN_THREAD(self):
-        self.can_recv_thread = JCANThread(self.can_dev)
-        self.can_recv_thread.signal_Can_Recv_Msg.connect(self.Can_Recv_Print)
-        self.can_recv_thread.isRunning = True
-        self.can_recv_thread.start()
+        try:
+            self.can_recv_thread = JCANThread(self.can_dev)
+            self.can_recv_thread.signal_Can_Recv_Msg.connect(self.Can_Recv_Print)
+            self.can_recv_thread.signal_Can_All_Data.connect(self.handle_all_can_data)
+            self.can_recv_thread.isRunning = True
+            self.can_recv_thread.start()
+        except Exception as e:
+            log_print(f"Start_CAN_THREAD : {str(e)}")
+            raise
         print("Start_CAN_THREAD OK!!!!!!!!!!")
+
+    def open_table_view(self):
+        self.can_tableview = TableView_MainWindow()
+        self.can_tableview.show()
+
 
 
     def Can_Recv_Print(self, recv_msg):
         self.textEdit_Recv.append(recv_msg)
 
+    def handle_all_can_data(self, all_data_str):
+        log_print("Received all CAN data:", all_data_str)
+        all_data_str = self.trim_hex(all_data_str)
+        if self.can_tableview is not None:
+            trimmer = all_data_str[30:-9]
+            result = self.can_tableview.show_parsed_data(trimmer)
+            log_print("Processed data:", result)
+
+
+    def trim_hex(self,hex_str):
+        hex_str = hex_str.replace("0x", "")
+        log_print(hex_str)
+        return hex_str
 
