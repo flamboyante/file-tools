@@ -2,7 +2,7 @@ import ctypes
 import tkinter
 from ctypes import *
 from enum import Enum
-from JiangCan_Tools.JiangCan import JCan_MSG
+from JiangCan_Tools.JiangCan import JCANThread
 
 # from ctypes import cdll, c_ushort, c_byte, c_uint, c_ubyte
 
@@ -160,7 +160,7 @@ class ECAN(object):
             config.accmask = 0xFFFFFFFF  # 设置屏蔽码
             config.filter = 0  # 设置滤波使能
             config.timing0, config.timing1 = timing_map.get(baud)
-            log_print("config.timing0, config.timing1",config.timing0, config.timing1)
+            log_print("config.timing0, config.timing1",config.timing0, hex(config.timing1))
             config.mode = 0
             ret = self.dll.InitCAN(self.type, self.index, self.channel, byref(config))
             if ret != STATUS_OK:
@@ -192,6 +192,7 @@ class ECAN(object):
             print("Exception on ReadBoardInfo!")
             raise
 
+    '''
     def receive(self) -> JCan_MSG:
         try:
             obj = CAN_OBJ()
@@ -231,6 +232,8 @@ class ECAN(object):
         except Exception:
             print("Exception on Transmit!")
             raise
+'''
+
 
     def get_err_info(self) -> str:
         try:
@@ -242,3 +245,53 @@ class ECAN(object):
             return str(f'{hex(err_info.Err_Code)}')
         except Exception:
             raise
+
+
+
+    def Tramsmit(self, DeviceType, DeviceIndex, CanInd, mcanobj):
+        try:
+            # mCAN_OBJ=CAN_OBJ*2
+            # self.dll.Transmit.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32, POINTER(CAN_OBJ),
+            # ctypes.c_uint16]
+            return self.dll.Transmit(DeviceType, DeviceIndex, CanInd, byref(mcanobj), c_uint16(1))
+        except:
+            print("Exception on Tramsmit!")
+            raise
+
+    def Receivce(self, DeviceType, DeviceIndex, CanInd, length):
+        try:
+            recmess = (CAN_OBJ * length)()
+            ret = self.dll.Receive(DeviceType, DeviceIndex, CanInd, byref(recmess), length, 0)
+            return length, recmess, ret
+        except:
+            print("Exception on Receive!")
+            raise
+
+    def send_msg_for_test(self):
+        canobj = CAN_OBJ()
+        canobj.ID = int(0x31801)
+        canobj.DataLen = int(3)
+        canobj.data[0] = int(0)
+        canobj.data[1] = int(90)
+        canobj.data[2] = int(90)
+        canobj.data[3] = int(0)
+        canobj.data[4] = int(0)
+        canobj.data[5] = int(0)
+        canobj.data[6] = int(0)
+        canobj.data[7] = int(0)
+        canobj.RemoteFlag = int(0)
+        canobj.ExternFlag = int(1)
+        print("canobj.ID",type(canobj.ID),":",canobj.ID)
+        print("canobj.DataLen", type(canobj.DataLen), ":", canobj.DataLen)
+        print("canobj.data[0]", type(canobj.data[0]), ":", canobj.data[0])
+        print("canobj.data[1]", type(canobj.data[1]), ":", canobj.data[1])
+        print("canobj.data[2]", type(canobj.data[2]), ":", canobj.data[2])
+        print("canobj.data[3]", type(canobj.data[3]), ":", canobj.data[3])
+        print("canobj.data[4]", type(canobj.data[4]), ":", canobj.data[4])
+        print("canobj.data[5]", type(canobj.data[5]), ":", canobj.data[5])
+        print("canobj.data[6]", type(canobj.data[6]), ":", canobj.data[6])
+        print("canobj.data[7]", type(canobj.data[7]), ":", canobj.data[7])
+        print("canobj.RemoteFlag",type(canobj.RemoteFlag),":",canobj.RemoteFlag)
+        print("canobj.ExternFlag", type(canobj.ExternFlag), ":", canobj.ExternFlag)
+        self.Tramsmit(USBCAN2, DevIndex, Channel1, canobj)
+

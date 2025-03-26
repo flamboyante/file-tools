@@ -1,6 +1,6 @@
 from PyQt5.QtCore import QThread, pyqtSignal
 
-
+import  serial
 # BMU控制台线程
 class BmuConsoleThread(QThread):
     signal_console_input = pyqtSignal(str)

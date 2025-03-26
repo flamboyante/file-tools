@@ -3,9 +3,11 @@ import os
 from PyQt5.QtWidgets import QDialog
 
 from JiangCan_Tools import can_ui
-from JiangCan_Tools.JiangCan import JCan_MSG
+
 from JiangCan_Tools.ECAN import ECAN, STATUS_OK, BaudRate
 from logging_config import  log_print
+
+from JiangCan_Tools.JiangCan import JCANThread
 
 
 class CanWindow(QDialog, can_ui.Ui_CanForm):
@@ -31,7 +33,9 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
         self.comboBox_Ycyk.setCurrentIndex(0)
 
         self.pushButton_Open.clicked.connect(self.open_dev)
-        self.pushButton_Send.clicked.connect(self.send_cmd)
+        self.pushButton_Send.clicked.connect(self.send_005a5a_test)
+
+        self.can_recv_thread = None
 
     def open_dev(self):
         try:
@@ -41,7 +45,7 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
             dev_val = self.type_map.get(dev_key)
             log_print("dev_key is",dev_key , "dev_val is" ,dev_val)
             localFilePath = os.path.join(os.getcwd(), '.\\JiangCan_Tools\\ECanVci64.dll')
-            self.can_dev = ECAN(dev_val, 0, 1, localFilePath)
+            self.can_dev = ECAN(dev_val, 0, 0, localFilePath)
             self.can_dev.open()
             if self.can_dev.is_open:
                 self.textEdit_Info.append("CAN open OK")
@@ -65,6 +69,7 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
                         self.textEdit_Info.append("CAN config OK")
                         if self.can_dev.start():
                             self.textEdit_Info.append("CAN start OK")
+                            self.Start_CAN_THREAD()
                         else:
                             self.textEdit_Info.append("CAN start FAIL")
                     else:
@@ -74,18 +79,23 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
 
         except Exception as e:
             log_print(f"CanWindow Opendev : {str(e)}")
+            raise
 
 
-    def send_cmd(self):
-        msg = JCan_MSG()
-        msg.id = 0x31801
-        msg.remote_flag = 0
-        msg.extend_flag = 1
-        msg.dlc = 3
-        msg.data[0] = 0x00
-        msg.data[1] = 0x1A
-        msg.data[2] = 0x1A
-        if self.can_dev.transmit(msg):
-            self.textEdit_Recv.append(f'SEND OK')
-        else:
-            self.textEdit_Recv.append(f'SEND ERROR: {self.can_dev.get_err_info()}')
+
+    def send_005a5a_test(self):
+        self.can_dev.send_msg_for_test()
+
+
+    def Start_CAN_THREAD(self):
+        self.can_recv_thread = JCANThread(self.can_dev)
+        self.can_recv_thread.signal_Can_Recv_Msg.connect(self.Can_Recv_Print)
+        self.can_recv_thread.isRunning = True
+        self.can_recv_thread.start()
+        print("Start_CAN_THREAD OK!!!!!!!!!!")
+
+
+    def Can_Recv_Print(self, recv_msg):
+        self.textEdit_Recv.append(recv_msg)
+
+
