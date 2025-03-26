@@ -1,6 +1,4 @@
-import datetime
 import sys
-import traceback
 
 import serial
 from PyQt5.QtSerialPort import QSerialPortInfo
@@ -10,13 +8,12 @@ import Media.Media
 
 from PowerControl import PowerControl
 from UIClass.BmuConsoleWindow import BmuConsoleWindow
-from UIClass.CanWindow import CanWindow
+from JiangCan_Tools.CanWindow import CanWindow
 from UIClass.FTPWindow import FTPWindow
 from UIClass.ReadWindow import ReadWindow
 
 from UIClass.TableViewWindow import TableView_MainWindow
 
-from USBCAN.ECAN import ECAN, BaudRate, STATUS_OK, CAN_OBJ
 from WorkClass.BmuConsoleThread import BmuConsoleThread
 from new_mainwindows_ui import  Ui_MainWindow
 from new_downfile_ui import  Ui_Form
@@ -25,8 +22,8 @@ from ycyk_422 import  Ycyk_422_Work
 
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import  QFileDialog
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox,QWidget,QFrame,QDialog
-from PyQt5.QtCore import QThread, QTimer, Qt, pyqtSignal, QSettings
+from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QDialog
+from PyQt5.QtCore import QThread, QTimer, Qt
 from PyQt5.QtGui import  QIcon
 import threading
 import time
@@ -573,11 +570,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             Action(FluentIcon.CONNECT, '控制台', triggered=self.show_bmu_console_window),
             Action(FluentIcon.DOWNLOAD, '版本重构', triggered=self.show_FlashDownWindow),
             Action(FluentIcon.ROBOT, '版本读取', triggered=self.show_FlashReadWindow),
-            Action(FluentIcon.POWER_BUTTON, '基带复位', triggered=self.IrRePOWER),
+            #Action(FluentIcon.POWER_BUTTON, '基带复位', triggered=self.IrRePOWER),
             Action(FluentIcon.SEARCH_MIRROR, '固件版本查询', triggered=self.IrVersionCheck),
             #Action(FluentIcon.MAIL, 'CAN收发', triggered=self.can_window_show),
             #Action(FluentIcon.MAIL, 'FTP',triggered = self.show_FTP_Window )
-            Action(FluentIcon.MAIL, 'TableView',triggered = self.Table_window_show )
+            Action(FluentIcon.MAIL, 'TableView',triggered = self.Table_Window_Show ),
+            Action(FluentIcon.POWER_BUTTON, 'Can', triggered=self.Can_Window_Show),
         ])
 
         # 添加始终隐藏的动作
@@ -629,13 +627,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.Serial_Worker.media.send(IR_VersionCheck_byte)
             log_print("-------------固件版本查询遥控指令已经发送成功-----------")
 
-    def can_window_show(self):
+    def Can_Window_Show(self):
         self.can_window = CanWindow()
         self.can_window.setWindowModality(Qt.NonModal)
         self.can_window.show()
 
 
-    def Table_window_show(self):
+    def Table_Window_Show(self):
         try:
             self.table_window = TableView_MainWindow()
             self.table_window.setWindowModality(Qt.NonModal)

@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>824</width>
-    <height>565</height>
+    <height>776</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -37,7 +37,7 @@
    <property name="geometry">
     <rect>
      <x>540</x>
-     <y>110</y>
+     <y>730</y>
      <width>261</width>
      <height>31</height>
     </rect>
@@ -52,24 +52,34 @@
     </property>
    </widget>
   </widget>
-  <widget class="QSplitter" name="splitter">
+  <widget class="QWidget" name="">
    <property name="geometry">
     <rect>
      <x>540</x>
      <y>40</y>
-     <width>261</width>
-     <height>31</height>
+     <width>251</width>
+     <height>141</height>
     </rect>
    </property>
-   <property name="orientation">
-    <enum>Qt::Horizontal</enum>
-   </property>
-   <widget class="QComboBox" name="comboBox_Type"/>
-   <widget class="QPushButton" name="pushButton_Open">
-    <property name="text">
-     <string>打开设备</string>
-    </property>
-   </widget>
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QPushButton" name="pushButton_Open">
+      <property name="text">
+       <string>打开设备</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QComboBox" name="comboBox_Type"/>
+    </item>
+    <item>
+     <widget class="QPushButton" name="pushButton_Close">
+      <property name="text">
+       <string>关闭设备</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
   </widget>
  </widget>
  <resources/>

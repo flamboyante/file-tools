@@ -6,47 +6,26 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>796</width>
-    <height>728</height>
+    <width>1127</width>
+    <height>722</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>但是风好大发动机号</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="SiTableView" name="demo_table_simple" native="true">
-    <property name="geometry">
-     <rect>
-      <x>20</x>
-      <y>430</y>
-      <width>741</width>
-      <height>221</height>
-     </rect>
-    </property>
-    <property name="sizePolicy">
-     <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-      <horstretch>0</horstretch>
-      <verstretch>0</verstretch>
-     </sizepolicy>
-    </property>
-   </widget>
-   <widget class="HkjTableView" name="tableView">
-    <property name="geometry">
-     <rect>
-      <x>79</x>
-      <y>14</y>
-      <width>631</width>
-      <height>291</height>
-     </rect>
-    </property>
-   </widget>
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
+     <widget class="HkjTableView" name="tableView"/>
+    </item>
+   </layout>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>796</width>
+     <width>1127</width>
      <height>26</height>
     </rect>
    </property>
@@ -58,12 +37,6 @@
    <class>HkjTableView</class>
    <extends>QTableView</extends>
    <header location="global">HkjView.HkjTableView</header>
-  </customwidget>
-  <customwidget>
-   <class>SiTableView</class>
-   <extends>QWidget</extends>
-   <header location="global">siui.components.widgets.table</header>
-   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources/>

@@ -2,8 +2,8 @@ import ctypes
 import tkinter
 from ctypes import *
 from enum import Enum
+from JiangCan_Tools.JiangCan import JCan_MSG
 
-from USBCAN.CAN import CAN_MSG
 # from ctypes import cdll, c_ushort, c_byte, c_uint, c_ubyte
 
 # from _ctypes import Structure
@@ -51,8 +51,8 @@ class BoardInfo(Structure):
 
 
 class BaudRate(Enum):
-    BAUD_1M = 1  # 串口接口
-    BAUD_800K = 2  # 以太接口
+    BAUD_1M = 1
+    BAUD_800K = 2
     BAUD_666K = 3
     BAUD_500K = 4
     BAUD_400K = 5
@@ -104,6 +104,7 @@ class ECAN(object):
         self.dll = None                         # DLL
         self.is_open = False
         self.err_code = 0
+        log_print("self.dll_path is ",self.dll_path)
         self.dll = cdll.LoadLibrary(self.dll_path)  # 加载DLL
         if self.dll is None:
             self.is_open = False
@@ -120,8 +121,8 @@ class ECAN(object):
                         self.is_open = False
                     else:
                         self.is_open = True
-        except Exception:
-            print("Exception on OpenDevice!")
+        except Exception as e:
+            log_print(f"ECAN.open : {str(e)}")
             raise
 
     def close(self):
@@ -159,7 +160,8 @@ class ECAN(object):
             config.accmask = 0xFFFFFFFF  # 设置屏蔽码
             config.filter = 0  # 设置滤波使能
             config.timing0, config.timing1 = timing_map.get(baud)
-            config.mode = 2
+            log_print("config.timing0, config.timing1",config.timing0, config.timing1)
+            config.mode = 0
             ret = self.dll.InitCAN(self.type, self.index, self.channel, byref(config))
             if ret != STATUS_OK:
                 return False
@@ -190,13 +192,13 @@ class ECAN(object):
             print("Exception on ReadBoardInfo!")
             raise
 
-    def receive(self) -> CAN_MSG:
+    def receive(self) -> JCan_MSG:
         try:
             obj = CAN_OBJ()
             ret = self.dll.Receive(self.type, self.index, self.channel, byref(obj), c_uint16(1), 0)
             if ret != STATUS_OK:
                 return None
-            msg = CAN_MSG()
+            msg = JCan_MSG()
             msg.id = obj.ID
             msg.remote_flag = obj.RemoteFlag
             msg.extend_flag = obj.ExternFlag
@@ -207,7 +209,7 @@ class ECAN(object):
             print("Exception on Receive!")
             raise
 
-    def transmit(self, msg: CAN_MSG) -> bool:
+    def transmit(self, msg: JCan_MSG) -> bool:
         try:
             obj = CAN_OBJ()
             obj.SendType = c_byte(2)
