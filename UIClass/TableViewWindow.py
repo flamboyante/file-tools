@@ -22,6 +22,20 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
             super(TableView_MainWindow, self).__init__(parent)
             self.setupUi(self)
 
+            ####修改我的groupBox 底色 我的按钮是紫色，搞个明显一点的
+            self.radioButton_fast.setText("哈哈哈哈哈")
+            self.radioButton_fast.adjustSize()
+            self.radioButton_fast.setChecked(True)
+
+            self.radioButton_slow.setText("哈哈哈哈哈1")
+            self.radioButton_slow.adjustSize()
+            self.radioButton_slow.setChecked(False)
+
+            self.radioButton_0.setText("哈哈哈哈哈2")
+            self.radioButton_0.adjustSize()
+            self.radioButton_0.setChecked(False)
+
+
             self.execler = Model_Excel_Task()
             sheetname = self.execler.execl_open()
             #List[Dict[str, str | int]]

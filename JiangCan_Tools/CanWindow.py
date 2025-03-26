@@ -1,4 +1,4 @@
-import os
+import os,time
 
 from PyQt5.QtWidgets import QDialog
 
@@ -14,31 +14,35 @@ from UIClass.TableViewWindow import TableView_MainWindow
 class CanWindow(QDialog, can_ui.Ui_CanForm):
     def __init__(self, parent=None):
         super(CanWindow, self).__init__(parent)
-        self.setupUi(self)
-        self.can_dev: ECAN = None
+        try:
+            self.setupUi(self)
+            self.can_dev: ECAN = None
 
-        self.type_map = {
-            "USBCAN-I":  3,
-            "USBCAN-II": 4,
-            "USBCAN-FD": 6
-        }
+            self.type_map = {
+                "USBCAN-I":  3,
+                "USBCAN-II": 4,
+                "USBCAN-FD": 6
+            }
 
-        self.ycyk_map = {
-            '快遥': 0,
-            '慢遥': 1
-        }
+            self.ycyk_map = {
+                '快遥': 0,
+                '慢遥': 1
+            }
 
-        self.comboBox_Type.addItems(self.type_map.keys())
-        self.comboBox_Type.setCurrentIndex(0)
-        self.comboBox_Ycyk.addItems(self.ycyk_map.keys())
-        self.comboBox_Ycyk.setCurrentIndex(0)
+            self.comboBox_Type.addItems(self.type_map.keys())
+            self.comboBox_Type.setCurrentIndex(0)
+            self.comboBox_Ycyk.addItems(self.ycyk_map.keys())
+            self.comboBox_Ycyk.setCurrentIndex(0)
 
-        self.pushButton_Open.clicked.connect(self.open_dev)
-        self.pushButton_Send.clicked.connect(self.send_005a5a_test)
-        self.pushButton_Close.clicked.connect(self.open_table_view)
+            self.pushButton_Open.clicked.connect(self.open_dev)
+            self.pushButton_Send.clicked.connect(self.send_test)
+            self.pushButton_TableView.clicked.connect(self.open_table_view)
 
-        self.can_recv_thread = None
-        self.can_tableview = None
+            self.can_recv_thread = None
+            self.can_tableview = None
+        except Exception as e:
+            log_print(f"CanWindow __init__ : {str(e)}")
+            raise
 
     def open_dev(self):
         try:
@@ -86,8 +90,64 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
 
 
 
-    def send_005a5a_test(self):
-        self.can_dev.send_msg_for_test()
+    def send_test(self):
+
+        ret = self.get_checkBox_sendFlag()
+        if ret is False:
+            sendtimes = 1
+            sendtimelag = 0
+        else:
+            sendtimes = self.get_combox_times()
+            sendtimelag = self.get_combox_lag()
+
+        while(sendtimes):
+            try:
+                if self.comboBox_Ycyk.currentText() == '快遥':
+                    log_print("comboBox_Ycyk快遥",sendtimes)
+                    self.can_dev.send_msg_for_fast_test()
+                else:
+                    log_print("comboBox_Ycyk慢遥",sendtimes)
+                    self.can_dev.send_msg_for_slow_test()
+            except Exception as e:
+                log_print(f"CanWindow send_test : {str(e)}")
+                raise
+            #延时sendtimelag ms
+            time.sleep(sendtimelag / 1000 )
+            sendtimes -= 1
+
+
+
+
+
+    def get_combox_times(self):
+        try:
+            times = self.comboBox_sendTimes.currentText()
+            log_print("times is",times, type(times))
+            #转为int
+            return int(times)
+        except Exception as e:
+            log_print(f"get_combox_timer : {str(e)}")
+            raise
+
+    def get_combox_lag(self):
+        try:
+            lag = self.comboBox_sendTime_lag.currentText()
+            log_print("lag is",lag, type(lag))
+            #转为int
+            return int(lag)
+        except Exception as e:
+            log_print(f"get_combox_timer : {str(e)}")
+            raise
+
+    def get_checkBox_sendFlag(self):
+        try:
+            flag = self.checkBox_sendFlag.isChecked()
+            log_print("flag is",flag, type(flag))
+            #转为int
+            return flag
+        except Exception as e:
+            log_print(f"get_checkBox_sendFlag : {str(e)}")
+            raise
 
 
     def Start_CAN_THREAD(self):
