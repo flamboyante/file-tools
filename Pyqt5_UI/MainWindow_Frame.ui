@@ -125,16 +125,19 @@
     <item>
      <widget class="QStackedWidget" name="stackedWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="page">
-       <layout class="QGridLayout" name="gridLayout">
-        <item row="0" column="0">
-         <widget class="HkjTableView" name="tableView"/>
-        </item>
-       </layout>
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <layout class="QGridLayout" name="gridLayout"/>
       </widget>
-      <widget class="QWidget" name="page_2"/>
+      <widget class="QWidget" name="page_2">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+      </widget>
      </widget>
     </item>
    </layout>
@@ -152,11 +155,6 @@
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
  <customwidgets>
-  <customwidget>
-   <class>HkjTableView</class>
-   <extends>QTableView</extends>
-   <header location="global">HkjView.HkjTableView</header>
-  </customwidget>
   <customwidget>
    <class>SiRadioButtonRefactor</class>
    <extends>QRadioButton</extends>

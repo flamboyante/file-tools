@@ -1,5 +1,6 @@
 import sys
 
+from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt, QAbstractTableModel
 
 from PyQt5.QtWidgets import QApplication, QTableView, QWidget, QVBoxLayout, QTableWidgetItem, QHeaderView
@@ -9,6 +10,7 @@ from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QMainWindow
 from siui.components.widgets.table import SiTableView
 
+from HkjView.HkjTableView import HkjTableView
 from Pyqt5_UI.MainWindow_Frame_ui import Ui_MainWindow
 
 
@@ -22,19 +24,6 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
             super(TableView_MainWindow, self).__init__(parent)
             self.setupUi(self)
 
-            ####修改我的groupBox 底色 我的按钮是紫色，搞个明显一点的
-            self.radioButton_fast.setText("哈哈哈哈哈")
-            self.radioButton_fast.adjustSize()
-            self.radioButton_fast.setChecked(True)
-
-            self.radioButton_slow.setText("哈哈哈哈哈1")
-            self.radioButton_slow.adjustSize()
-            self.radioButton_slow.setChecked(False)
-
-            self.radioButton_0.setText("哈哈哈哈哈2")
-            self.radioButton_0.adjustSize()
-            self.radioButton_0.setChecked(False)
-
 
             self.execler = Model_Excel_Task()
             sheetname = self.execler.execl_open()
@@ -43,17 +32,41 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
 
             print(self.local_field)
 
+
+            #############################################
+
+            while self.stackedWidget.count() > 0:  # 循环移除所有预置页面
+                widget = self.stackedWidget.widget(0)
+                self.stackedWidget.removeWidget(widget)
+                widget.deleteLater()
+            # 初始化所有RadioButton文本
+            self._init_radio_buttons()
+
+            # 创建共享数据模型
+            self.shared_model = self._create_shared_model()
+
+            # 动态生成TableView页面
+            self._create_table_pages()
+
+            # 绑定RadioButton信号
+            self._connect_radio_buttons()
+
+            # 默认选中第一个按钮
+            self.radioButton_2.setChecked(True)
+            #######################################################
+
+
             self.model = None
 
-            self.set_model_init()
+            #self.set_model_init()
 
-            self.set_table_init()
+            #self.set_table_init()
 
             #self.init_siui_table()
         except Exception as e:
             log_print(f"TableView_MainWindow __init__: {str(e)}")
 
-
+    """
     def set_model_init(self):
         try:
             log_print("set_model")
@@ -62,9 +75,9 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
 
             self.model.setHorizontalHeaderLabels(['遥测名称', '数值', 'start bit','16进制源码','参考公式'])
 
-            """3. 创建TableView并设置模型"""
+            ####3. 创建TableView并设置模型
             # 设置模型
-            self.tableView.setModel(self.model)  # 参数：QAbstractItemModel        """4. 表格属性设置"""
+            self.tableView.setModel(self.model)  # 参数：QAbstractItemModel        
             # 设置表格列宽自适应内容
             self.tableView.resizeColumnsToContents()  # 返回值：None
 
@@ -127,7 +140,7 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
         except Exception as e:
             log_print(f"set_data error: {str(e)}")
 
-
+"""
     def show_parsed_data(self, hex_data):
         try:
             # 解析数据
@@ -149,4 +162,118 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
         except Exception as e:
             log_print(f"显示数据出错: {str(e)}")
 
+    ##############################################
+    # 新增方法 1：初始化RadioButton显示文本
+    ##############################################
+    def _init_radio_buttons(self):
+        radio_buttons = [
+            self.radioButton_fast, self.radioButton_slow,
+            self.radioButton_0, self.radioButton_1, self.radioButton_2,
+            self.radioButton_3, self.radioButton_4, self.radioButton_5,
+            self.radioButton_6, self.radioButton_7, self.radioButton_8,
+            self.radioButton_9, self.radioButton_12, self.radioButton_13
+        ]
+        ##
 
+
+    ##############################################
+    # 新增方法 2：创建共享数据模型
+    ##############################################
+    def _create_shared_model(self):
+        model = QStandardItemModel(self.col_len, self.row_len)
+        model.setHorizontalHeaderLabels(['遥测名称', '数值', 'start bit', '16进制源码', '参考公式'])
+        for row_idx, row_data in enumerate(self.local_field):
+            name_item = QStandardItem(str(row_data.get("name", "")))
+            bit_item = QStandardItem(str(row_data.get("start_bits", 0)))
+            shell_item = QStandardItem(str(row_data.get("shell", "")))
+            model.setItem(row_idx, 0, name_item)
+            model.setItem(row_idx, 2, bit_item)
+            model.setItem(row_idx, 4, shell_item)
+        return model
+
+    ##############################################
+    # 新增方法 3：动态创建多个TableView页面
+    ##############################################
+    def _create_table_pages(self):
+        radio_count = self.groupBox.layout().count()  # 获取RadioButton数量
+        log_print("radio_count is",radio_count)
+        for _ in range(radio_count):  # 为每个RadioButton创建页面
+            log_print("_",_)
+            page = self._create_single_page(_)
+            self.stackedWidget.addWidget(page)
+
+    ##############################################
+    # 新增方法 4：创建单个TableView页面
+    ##############################################
+    def _create_single_page(self,page_index):
+        page = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(page)
+        # 添加标题标签（关键修改）
+        title_label = QtWidgets.QLabel(f"当前视图：{self._get_radio_text(page_index)}")
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                color: #2c3e50;
+                margin-bottom: 10px;
+            }
+        """)
+        layout.addWidget(title_label)
+
+
+        tableView = HkjTableView()  # 使用自定义的HkjTableView
+
+        # 应用共享模型和统一样式
+        tableView.setModel(self.shared_model)
+        tableView.resizeColumnsToContents()
+        tableView.verticalHeader().setDefaultSectionSize(40)
+        tableView.horizontalHeader().setDefaultSectionSize(200)
+        tableView.setAlternatingRowColors(True)
+        tableView.setEditTriggers(QtWidgets.QTableView.NoEditTriggers)
+
+        #### 设置列宽自适应策略
+        tableView.verticalHeader().setSectionResizeMode(QHeaderView.Interactive)  # 允许手动调整
+        tableView.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)  # 允许手动调整
+        tableView.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        #self.tableView.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+
+
+
+        layout.addWidget(tableView)
+        return page
+
+    ##############################################
+    # 新增方法 5：绑定所有RadioButton的切换信号
+    ##############################################
+    def _connect_radio_buttons(self):
+        radio_buttons = [
+            self.radioButton_fast, self.radioButton_slow,
+            self.radioButton_0, self.radioButton_1, self.radioButton_2,
+            self.radioButton_3, self.radioButton_4, self.radioButton_5,
+            self.radioButton_6, self.radioButton_7, self.radioButton_8,
+            self.radioButton_9, self.radioButton_12, self.radioButton_13
+        ]
+        for idx, btn in enumerate(radio_buttons):
+            # 绑定信号时使用lambda确保正确传递索引
+            btn.toggled.connect(lambda checked, x=idx: self._switch_page(x) if checked else None)
+
+    ##############################################
+    # 新增方法 6：页面切换逻辑
+    ##############################################
+    def _switch_page(self, index):
+        log_print(f"尝试切换到页面索引: {index}")
+        if index < self.stackedWidget.count():
+            self.stackedWidget.setCurrentIndex(index)
+        else:
+            log_print(f"无效的页面索引: {index} (总页数: {self.stackedWidget.count()})")
+
+    def _get_radio_text(self, index):
+        """根据索引获取RadioButton文本"""
+        radio_buttons = [
+            self.radioButton_fast, self.radioButton_slow,
+            self.radioButton_0, self.radioButton_1, self.radioButton_2,
+            self.radioButton_3, self.radioButton_4, self.radioButton_5,
+            self.radioButton_6, self.radioButton_7, self.radioButton_8,
+            self.radioButton_9, self.radioButton_12, self.radioButton_13
+        ]
+        return radio_buttons[index].text() if index < len(radio_buttons) else "未知视图"

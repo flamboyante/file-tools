@@ -69,14 +69,13 @@ class Ui_MainWindow(object):
         self.stackedWidget = QtWidgets.QStackedWidget(self.centralwidget)
         self.stackedWidget.setObjectName("stackedWidget")
         self.page = QtWidgets.QWidget()
+        self.page.setEnabled(True)
         self.page.setObjectName("page")
         self.gridLayout = QtWidgets.QGridLayout(self.page)
         self.gridLayout.setObjectName("gridLayout")
-        self.tableView = HkjTableView(self.page)
-        self.tableView.setObjectName("tableView")
-        self.gridLayout.addWidget(self.tableView, 0, 0, 1, 1)
         self.stackedWidget.addWidget(self.page)
         self.page_2 = QtWidgets.QWidget()
+        self.page_2.setEnabled(True)
         self.page_2.setObjectName("page_2")
         self.stackedWidget.addWidget(self.page_2)
         self.horizontalLayout.addWidget(self.stackedWidget)
@@ -90,7 +89,7 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusbar)
 
         self.retranslateUi(MainWindow)
-        self.stackedWidget.setCurrentIndex(0)
+        self.stackedWidget.setCurrentIndex(1)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -111,5 +110,4 @@ class Ui_MainWindow(object):
         self.radioButton_9.setText(_translate("MainWindow", "slot9"))
         self.radioButton_12.setText(_translate("MainWindow", "slot12"))
         self.radioButton_13.setText(_translate("MainWindow", "slot13"))
-from HkjView.HkjTableView import HkjTableView
 from siui.components.button import SiRadioButtonRefactor
