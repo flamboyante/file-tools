@@ -54,12 +54,13 @@ class Model_Excel_Task():
 
         current_bit = 0
         for row in ws.iter_rows(min_row=2, values_only=True):
-            print(row)
+            print("excel_deal row is",row)
             try:
                 field ={
                     "name": str(row[0]),
                     "bits": int(row[1]),
                     "start_bits" : current_bit,
+                    "shell" :str(row[2])
                 }
                 self.fields.append(field)
                 current_bit += field["bits"]
@@ -86,9 +87,10 @@ class Model_Excel_Task():
                 start = field["start_bits"]
                 end = start + field["bits"]
                 value = int(binary_data[start:end], 2)
+                print("start is",start , "end is",end, "value is",value,"hex value is",hex(value))
                 parsed_data.append({
                     "name": field["name"],
-                    "value": value
+                    "value": value,
                 })
             log_print("parsed_data is",parsed_data)
             return parsed_data
