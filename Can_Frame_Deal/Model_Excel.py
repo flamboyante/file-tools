@@ -12,7 +12,7 @@ class Model_Excel_Task():
     def __init__(self, parent=None):
         self.wb = None
         self.sheet_names = None
-        self.fields = []
+        self.sheet_fields = {}
 
 
     def execl_open(self):
@@ -20,6 +20,9 @@ class Model_Excel_Task():
         print(localFilePath)
         self.wb = load_workbook(localFilePath)
         self.wbsheet_names = self.wb.sheetnames
+
+
+
         log_print(self.wbsheet_names)
         return  self.wbsheet_names
 
@@ -53,6 +56,7 @@ class Model_Excel_Task():
         print(col_width)
 
         current_bit = 0
+        localfields = []
         for row in ws.iter_rows(min_row=2, values_only=True):
             print("excel_deal row is",row)
             try:
@@ -62,18 +66,19 @@ class Model_Excel_Task():
                     "start_bits" : current_bit,
                     "shell" :str(row[2])
                 }
-                self.fields.append(field)
+                localfields.append(field)
                 current_bit += field["bits"]
             except Exception as e:
                 log_print("send_file:", e)
 
+        #保存localfields到sheet_fields中
+        self.sheet_fields[sheet_name] = localfields
+
+        return localfields ,row_len ,col_len
 
 
-        return self.fields ,row_len ,col_len
 
-
-
-    def parse_can_data(self, hex_data):
+    def parse_can_data(self, hex_data,name):
         """
         根据 Excel 中的字段信息解析 CAN 数据
         :param hex_data: 十六进制字符串形式的 CAN 数据
@@ -83,7 +88,7 @@ class Model_Excel_Task():
             log_print("parse_can_datais",hex_data)
             binary_data = bin(int(hex_data.replace(" ", ""), 16))[2:].zfill(len(hex_data.replace(" ", "")) * 4)
             parsed_data = []
-            for field in self.fields:
+            for field in self.sheet_fields[name]:
                 start = field["start_bits"]
                 end = start + field["bits"]
                 value = int(binary_data[start:end], 2)

@@ -26,11 +26,11 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
 
 
             self.execler = Model_Excel_Task()
-            sheetname = self.execler.execl_open()
+            self.sheetnames = self.execler.execl_open()
+            log_print("sheetnams:" ,self.sheetnames)
             #List[Dict[str, str | int]]
-            self.local_field, self.row_len , self.col_len = self.execler.excel_deal(sheetname[0])
+            #self.local_field, self.row_len , self.col_len = self.execler.excel_deal(sheetname[0])
 
-            print(self.local_field)
 
 
             #############################################
@@ -42,8 +42,10 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
             # 初始化所有RadioButton文本
             self._init_radio_buttons()
 
-            # 创建共享数据模型
-            self.shared_model = self._create_shared_model()
+
+            # 新增：存储所有Sheet模型的字典
+            self.sheet_models = {}  # 格式: {sheet_index: QStandardItemModel}
+            self._generate_sheet_models(self.sheetnames)
 
             # 动态生成TableView页面
             self._create_table_pages()
@@ -56,7 +58,7 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
             #######################################################
 
 
-            self.model = None
+            #self.model = None
 
             #self.set_model_init()
 
@@ -141,24 +143,55 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
             log_print(f"set_data error: {str(e)}")
 
 """
-    def show_parsed_data(self, hex_data):
+
+    def _generate_sheet_models(self, sheet_names):
+        """为每个Excel Sheet生成独立数据模型"""
+        for sheet_index, sheet_name in enumerate(sheet_names):
+            # 处理当前Sheet数据
+            local_field, row_len, col_len = self.execler.excel_deal(sheet_name)
+
+
+            # 创建模型
+            model = QStandardItemModel(col_len, row_len)
+            model.setHorizontalHeaderLabels(['遥测名称', '数值', 'start bit', '16进制源码', '参考公式'])
+
+            # 填充数据
+            for row_idx, row_data in enumerate(local_field):
+                name_item = QStandardItem(str(row_data.get("name", "")))
+                bit_item = QStandardItem(str(row_data.get("start_bits", 0)))
+                shell_item = QStandardItem(str(row_data.get("shell", "")))
+                model.setItem(row_idx, 0, name_item)
+                model.setItem(row_idx, 2, bit_item)
+                model.setItem(row_idx, 4, shell_item)
+
+            # 存储模型
+            self.sheet_models[sheet_index] = model
+
+    def get_sheet_model(self, sheet_index=0):
+        """获取指定Sheet的模型（默认返回第一个）"""
+        return self.sheet_models.get(sheet_index, None)
+
+    def get_all_sheet_models(self):
+        """获取全部Sheet模型字典"""
+        return self.sheet_models
+    def show_parsed_data(self, hex_data , name_index):
         try:
             # 解析数据
-            parsed_data = self.execler.parse_can_data(hex_data)
+            parsed_data = self.execler.parse_can_data(hex_data ,self.sheetnames[name_index])
             # 填充数据到第二列
             for row_idx, data in enumerate(parsed_data):
                 value = str(data["value"])
                 value_item = QStandardItem(value)
                 value_item.setTextAlignment(Qt.AlignCenter)
                 # 如果当前行存在则更新第二列数据，不存在则添加新行
-                self.model.setItem(row_idx, 1, value_item)  # 第一列
+                self.sheet_models.get(name_index).setItem(row_idx, 1, value_item)  # 第一列
 
 
                 value_hex = str(hex(data["value"]))
                 value_hex_item = QStandardItem(value_hex)
                 value_hex_item.setTextAlignment(Qt.AlignCenter)
                 # 如果当前行存在则更新第二列数据，不存在则添加新行
-                self.model.setItem(row_idx, 3, value_hex_item)  # 第一列
+                self.sheet_models.get(name_index).setItem(row_idx, 3, value_hex_item)  # 第一列
         except Exception as e:
             log_print(f"显示数据出错: {str(e)}")
 
@@ -176,20 +209,6 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
         ##
 
 
-    ##############################################
-    # 新增方法 2：创建共享数据模型
-    ##############################################
-    def _create_shared_model(self):
-        model = QStandardItemModel(self.col_len, self.row_len)
-        model.setHorizontalHeaderLabels(['遥测名称', '数值', 'start bit', '16进制源码', '参考公式'])
-        for row_idx, row_data in enumerate(self.local_field):
-            name_item = QStandardItem(str(row_data.get("name", "")))
-            bit_item = QStandardItem(str(row_data.get("start_bits", 0)))
-            shell_item = QStandardItem(str(row_data.get("shell", "")))
-            model.setItem(row_idx, 0, name_item)
-            model.setItem(row_idx, 2, bit_item)
-            model.setItem(row_idx, 4, shell_item)
-        return model
 
     ##############################################
     # 新增方法 3：动态创建多个TableView页面
@@ -197,15 +216,15 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
     def _create_table_pages(self):
         radio_count = self.groupBox.layout().count()  # 获取RadioButton数量
         log_print("radio_count is",radio_count)
-        for _ in range(radio_count):  # 为每个RadioButton创建页面
-            log_print("_",_)
-            page = self._create_single_page(_)
+        for i in range(radio_count):  # 为每个RadioButton创建页面
+            log_print("i",i)
+            page = self._create_single_page(i,i)
             self.stackedWidget.addWidget(page)
 
     ##############################################
     # 新增方法 4：创建单个TableView页面
     ##############################################
-    def _create_single_page(self,page_index):
+    def _create_single_page(self,page_index,sheet_index):
         page = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(page)
         # 添加标题标签（关键修改）
@@ -220,11 +239,16 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
         """)
         layout.addWidget(title_label)
 
-
-        tableView = HkjTableView()  # 使用自定义的HkjTableView
-
-        # 应用共享模型和统一样式
-        tableView.setModel(self.shared_model)
+        # 获取当前Sheet的独立模型
+        sheet_model = self.sheet_models.get(sheet_index)  # 从字典中提取
+        log_print(f"创建TableView，当前Sheet索引：{sheet_index}")
+        # 创建TableView并绑定模型
+        tableView = HkjTableView()
+        if sheet_model:  # 确保模型存在
+            tableView.setModel(sheet_model)
+        else:
+            log_print(f"警告：Sheet索引 {sheet_index} 的模型未找到,shezhi 0 moxing")
+            tableView.setModel(self.sheet_models.get(0))
         tableView.resizeColumnsToContents()
         tableView.verticalHeader().setDefaultSectionSize(40)
         tableView.horizontalHeader().setDefaultSectionSize(200)

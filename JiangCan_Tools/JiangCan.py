@@ -54,6 +54,7 @@ class JCANThread(QThread):
                             final_hex = '0x' + (hex(rec[0].data[i])[2:]).zfill(2)
                             data_str = data_str + final_hex + " "
                         self.all_data_buffer += data_str  # 将当前帧的数据添加到缓冲区
+                        mstr = mstr + data_str
                         self.signal_Can_Recv_Msg.emit(mstr)
                     else:
                         mstr = mstr + " Type:Romte " + " Data: Remote Request"

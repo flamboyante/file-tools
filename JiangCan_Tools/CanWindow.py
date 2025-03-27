@@ -172,13 +172,33 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
         self.textEdit_Recv.append(recv_msg)
 
     def handle_all_can_data(self, all_data_str):
-        log_print("Received all CAN data:", all_data_str)
-        all_data_str = self.trim_hex(all_data_str)
-        if self.can_tableview is not None:
-            trimmer = all_data_str[30:-9]
-            result = self.can_tableview.show_parsed_data(trimmer)
-            log_print("Processed data:", result)
+        try:
+            log_print("Received all CAN data:", type(all_data_str),all_data_str)
 
+
+            all_data_str = self.trim_hex(all_data_str)
+
+            #hex_str = ' '.join([x.replace('0x', '') for x in all_data_str])
+            all_hex_data = list(bytes.fromhex(all_data_str))  # 返回的是bytes对象，用list()转为列表
+            log_print("Received all CAN data  hex:", type(all_hex_data), all_hex_data)
+
+            if all_hex_data[9] == 0xa5:
+                log_print("收到快遥")
+                name_index = 0
+            if all_hex_data[9] == 0x55:
+                name_index =1
+                log_print("收到慢遥")
+            else:
+                return
+
+
+            if self.can_tableview is not None:
+                trimmer = all_data_str[30:-9]
+                result = self.can_tableview.show_parsed_data(trimmer,name_index)
+                log_print("Processed data:", result)
+        except Exception as e:
+            log_print(f"handle_all_can_data : {str(e)}")
+            raise
 
     def trim_hex(self,hex_str):
         hex_str = hex_str.replace("0x", "")
