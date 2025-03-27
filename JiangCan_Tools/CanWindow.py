@@ -1,6 +1,6 @@
 import os,time
 
-from PyQt5.QtWidgets import QDialog
+from PyQt5.QtWidgets import QDialog, QMessageBox
 
 from JiangCan_Tools import can_ui
 
@@ -17,6 +17,7 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
         try:
             self.setupUi(self)
             self.can_dev: ECAN = None
+            self.is_opened = False
 
             self.type_map = {
                 "USBCAN-I":  3,
@@ -29,12 +30,16 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
                 '慢遥': 1
             }
 
+
             self.comboBox_Type.addItems(self.type_map.keys())
             self.comboBox_Type.setCurrentIndex(0)
             self.comboBox_Ycyk.addItems(self.ycyk_map.keys())
             self.comboBox_Ycyk.setCurrentIndex(0)
 
-            self.pushButton_Open.clicked.connect(self.open_dev)
+            self.comboBox_sendTime_lag.addItem("1000")
+            self.comboBox_sendTimes.addItem("1")
+
+            self.pushButton_Open.clicked.connect(self.toggle_can_device)
             self.pushButton_Send.clicked.connect(self.send_test)
             self.pushButton_TableView.clicked.connect(self.open_table_view)
 
@@ -44,6 +49,13 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
             log_print(f"CanWindow __init__ : {str(e)}")
             raise
 
+    def toggle_can_device(self):
+        """切换设备状态"""
+        log_print("toggle_can_device")
+        if self.is_opened:
+            self.close_dev()
+        else:
+            self.open_dev()
     def open_dev(self):
         try:
             pwd = os.getcwd()
@@ -76,6 +88,8 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
                         self.textEdit_Info.append("CAN config OK")
                         if self.can_dev.start():
                             self.textEdit_Info.append("CAN start OK")
+                            self.is_opened = True
+                            self.disable_tab()
                             self.Start_CAN_THREAD()
                         else:
                             self.textEdit_Info.append("CAN start FAIL")
@@ -88,10 +102,29 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
             log_print(f"CanWindow Opendev : {str(e)}")
             raise
 
+    def close_dev(self):
+        try:
+            if self.can_dev and self.can_dev.is_open:
+                # 停止接收线程
+                if self.can_recv_thread:
+                    self.can_recv_thread.isRunning = False
+                    self.can_recv_thread.stop()
+                    self.can_recv_thread.quit()
+
+                self.can_dev.close()
+                self.is_opened = False
+                self.enable_tab()
+                self.textEdit_Info.append("CAN设备已关闭")
+        except Exception as e:
+            log_print(f"Close device error: {str(e)}")
+            QMessageBox.critical(self, 'Error', f'关闭设备失败: {str(e)}')
 
 
     def send_test(self):
 
+        if self.is_opened  is False:
+            QMessageBox.warning(self, 'Error', 'CAN INIT ERROR')
+            return False
         ret = self.get_checkBox_sendFlag()
         if ret is False:
             sendtimes = 1
@@ -122,6 +155,8 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
     def get_combox_times(self):
         try:
             times = self.comboBox_sendTimes.currentText()
+            if times is None:
+                times = 1
             log_print("times is",times, type(times))
             #转为int
             return int(times)
@@ -132,6 +167,8 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
     def get_combox_lag(self):
         try:
             lag = self.comboBox_sendTime_lag.currentText()
+            if lag is None:
+                lag = 1000
             log_print("lag is",lag, type(lag))
             #转为int
             return int(lag)
@@ -179,16 +216,17 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
             all_data_str = self.trim_hex(all_data_str)
 
             #hex_str = ' '.join([x.replace('0x', '') for x in all_data_str])
-            all_hex_data = list(bytes.fromhex(all_data_str))  # 返回的是bytes对象，用list()转为列表
-            log_print("Received all CAN data  hex:", type(all_hex_data), all_hex_data)
+            all_data_hex = list(bytes.fromhex(all_data_str))  # 返回的是bytes对象，用list()转为列表
+            log_print("Received all CAN data  hex:", type(all_data_hex), all_data_hex)
 
-            if all_hex_data[9] == 0xa5:
+            if all_data_hex[3] == 0xa5:
                 log_print("收到快遥")
                 name_index = 0
-            if all_hex_data[9] == 0x55:
+            elif all_data_hex[3] == 0x55:
                 name_index =1
                 log_print("收到慢遥")
             else:
+                log_print("收到其他", all_data_hex[3])
                 return
 
 
@@ -205,3 +243,10 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
         log_print(hex_str)
         return hex_str
 
+    def disable_tab(self):
+        self.pushButton_Open.setText("关闭设备")  # 修改按钮文字
+        self.comboBox_Type.setDisabled(True)
+
+    def enable_tab(self):
+        self.pushButton_Open.setText("打开设备")  # 修改按钮文字
+        self.comboBox_Type.setEnabled(True)

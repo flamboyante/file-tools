@@ -195,9 +195,7 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
         except Exception as e:
             log_print(f"显示数据出错: {str(e)}")
 
-    ##############################################
-    # 新增方法 1：初始化RadioButton显示文本
-    ##############################################
+
     def _init_radio_buttons(self):
         radio_buttons = [
             self.radioButton_fast, self.radioButton_slow,
@@ -210,9 +208,7 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
 
 
 
-    ##############################################
-    # 新增方法 3：动态创建多个TableView页面
-    ##############################################
+
     def _create_table_pages(self):
         radio_count = self.groupBox.layout().count()  # 获取RadioButton数量
         log_print("radio_count is",radio_count)
@@ -221,9 +217,7 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
             page = self._create_single_page(i,i)
             self.stackedWidget.addWidget(page)
 
-    ##############################################
-    # 新增方法 4：创建单个TableView页面
-    ##############################################
+
     def _create_single_page(self,page_index,sheet_index):
         page = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(page)
@@ -266,9 +260,7 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
         layout.addWidget(tableView)
         return page
 
-    ##############################################
-    # 新增方法 5：绑定所有RadioButton的切换信号
-    ##############################################
+
     def _connect_radio_buttons(self):
         radio_buttons = [
             self.radioButton_fast, self.radioButton_slow,
@@ -281,9 +273,7 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
             # 绑定信号时使用lambda确保正确传递索引
             btn.toggled.connect(lambda checked, x=idx: self._switch_page(x) if checked else None)
 
-    ##############################################
-    # 新增方法 6：页面切换逻辑
-    ##############################################
+
     def _switch_page(self, index):
         log_print(f"尝试切换到页面索引: {index}")
         if index < self.stackedWidget.count():

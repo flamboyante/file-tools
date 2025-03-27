@@ -78,21 +78,26 @@ class Model_Excel_Task():
 
 
 
-    def parse_can_data(self, hex_data,name):
+    def parse_can_data(self, data_str,name):
         """
         根据 Excel 中的字段信息解析 CAN 数据
         :param hex_data: 十六进制字符串形式的 CAN 数据
         :return: 解析结果列表
         """
         try:
-            log_print("parse_can_datais",hex_data)
-            binary_data = bin(int(hex_data.replace(" ", ""), 16))[2:].zfill(len(hex_data.replace(" ", "")) * 4)
+            log_print("parse_can_data : parse_can_datas",type(data_str),data_str)
+            data_hex = list(bytes.fromhex(data_str))  # 返回的是bytes对象，用list()转为列表
+            log_print("parse_can_data :data_hex:", type(data_hex), data_hex)
+            if(name == 1):
+                log_print("ID is",data_hex[88] << 8 | data_hex[89])
+                log_print("slot is" , data_hex[92])
+            binary_data = bin(int(data_str.replace(" ", ""), 16))[2:].zfill(len(data_str.replace(" ", "")) * 4)
             parsed_data = []
             for field in self.sheet_fields[name]:
                 start = field["start_bits"]
                 end = start + field["bits"]
                 value = int(binary_data[start:end], 2)
-                print("start is",start , "end is",end, "value is",value,"hex value is",hex(value))
+                #print("start is",start , "end is",end, "value is",value,"hex value is",hex(value))
                 parsed_data.append({
                     "name": field["name"],
                     "value": value,

@@ -42,7 +42,7 @@ class JCANThread(QThread):
                     if rec[0].TimeFlag == 0:
                         mstr = mstr + " Time: "
                     else:
-                        mstr = mstr + " Time:" + hex(rec[0].TimeStamp).zfill(8)
+                        mstr = mstr + " Time:" + self.parse_timestamp(rec[0].TimeStamp)
                     if rec[0].ExternFlag == 0:
                         mstr = mstr + " ID:" + hex(rec[0].ID).zfill(3) + " Format:Stand "
                     else:
@@ -66,20 +66,28 @@ class JCANThread(QThread):
                             self.signal_Can_All_Data.emit(self.all_data_buffer)  # 发送所有数据
                             self.all_data_buffer = ""  # 清空缓冲区
                         self.last_recv_time = time.time()  # 更新上一次接收到 CAN 帧的时间
-                self.usleep(100)
+                self.usleep(10)
         except Exception as e:
             log_print(f"JCANThread RECV ERROR: {str(e)}")
             raise
 
+    def parse_timestamp(self, timestamp):
+        """
+        将毫秒级时间戳转换为可读格式
+        示例：timestamp=1234567890123 -> "2009-02-13 23:31:30.123"
+        """
+        from datetime import datetime
+        try:
+            log_print("parse_timestamp is ", timestamp)
+            # 将时间戳转为秒（整除1000）和毫秒（取模1000）
+            ts_seconds = timestamp // 1000
+            milliseconds = timestamp % 1000
+
+            # 转换为datetime对象并格式化
+            dt = datetime.fromtimestamp(ts_seconds +946684800)
+            return dt.strftime(f"%Y-%m-%d %H:%M:%S.{milliseconds:03d}")
+        except Exception as e:
+            log_print(f"时间戳解析错误: {e} (原始值:{timestamp})")
+            return str(timestamp)
 
 
-
-
-
-'''
-    try:
-        
-    except Exception as e:
-        log_print(f"TableView_MainWindow __init__: {str(e)}")
-        raise
-'''
