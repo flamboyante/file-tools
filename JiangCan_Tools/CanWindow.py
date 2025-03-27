@@ -1,7 +1,7 @@
 import os,time
 
 from PyQt5.QtWidgets import QDialog, QMessageBox
-
+from PyQt5.QtCore import QTimer
 from JiangCan_Tools import can_ui
 
 from JiangCan_Tools.ECAN import ECAN, STATUS_OK, BaudRate
@@ -102,6 +102,7 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
             log_print(f"CanWindow Opendev : {str(e)}")
             raise
 
+
     def close_dev(self):
         try:
             if self.can_dev and self.can_dev.is_open:
@@ -119,35 +120,51 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
             log_print(f"Close device error: {str(e)}")
             QMessageBox.critical(self, 'Error', f'关闭设备失败: {str(e)}')
 
+    def _do_send(self):
+        if self.remaining_times <= 0:
+            self.pushButton_Send.setEnabled(True)  # 发送完成后恢复按钮
+            return
 
+        if self.get_checkBox_sendFlag() is False and self.remaining_times is not 1:
+            log_print("强制关闭连续发送")
+            self.remaining_times = 0
+            self.pushButton_Send.setEnabled(True)
+            QMessageBox.critical(self, 'Info', '强制关闭连续发送')
+            return
+
+        try:
+            # 执行单次发送
+            if self.current_ycyk == '快遥':
+                self.can_dev.send_msg_for_fast_test()
+            else:
+                self.can_dev.send_msg_for_slow_test()
+
+            self.remaining_times -= 1
+
+            # 使用QTimer实现非阻塞延时
+            if self.send_interval > 0:
+                QTimer.singleShot(self.send_interval, self._do_send)
+            else:
+                self._do_send()  # 无间隔连续发送
+
+        except Exception as e:
+            log_print(f"发送失败: {str(e)}")
+            self.pushButton_Send.setEnabled(True)
     def send_test(self):
-
-        if self.is_opened  is False:
+        if not self.is_opened:
             QMessageBox.warning(self, 'Error', 'CAN INIT ERROR')
-            return False
-        ret = self.get_checkBox_sendFlag()
-        if ret is False:
-            sendtimes = 1
-            sendtimelag = 0
-        else:
-            sendtimes = self.get_combox_times()
-            sendtimelag = self.get_combox_lag()
+            return
 
-        while(sendtimes):
-            try:
-                if self.comboBox_Ycyk.currentText() == '快遥':
-                    log_print("comboBox_Ycyk快遥",sendtimes)
-                    self.can_dev.send_msg_for_fast_test()
-                else:
-                    log_print("comboBox_Ycyk慢遥",sendtimes)
-                    self.can_dev.send_msg_for_slow_test()
-            except Exception as e:
-                log_print(f"CanWindow send_test : {str(e)}")
-                raise
-            #延时sendtimelag ms
-            time.sleep(sendtimelag / 1000 )
-            sendtimes -= 1
+        # 初始化发送参数
+        self.remaining_times = self.get_combox_times() if self.get_checkBox_sendFlag() else 1
+        self.send_interval = self.get_combox_lag() if self.get_checkBox_sendFlag() else 0
+        self.current_ycyk = self.comboBox_Ycyk.currentText()
 
+        # 禁用发送按钮防止重复点击
+        self.pushButton_Send.setEnabled(False)
+
+        # 开始发送流程
+        self._do_send()
 
 
 
@@ -208,10 +225,25 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
     def Can_Recv_Print(self, recv_msg):
         self.textEdit_Recv.append(recv_msg)
 
+    def Can_Recv_Print_Blue(self, recv_msg):
+        try:
+            # 分割并格式化消息
+            self.textEdit_Recv.append("\n")
+            numbers = recv_msg.split()
+            grouped = [numbers[i:i + 8] for i in range(0, len(numbers), 8)]
+            # 使用HTML换行标签<br>代替\n
+            formatted_msg = '<br>'.join([' '.join(group) for group in grouped])
+            # 插入带样式的HTML内容
+            self.textEdit_Recv.insertHtml(f'<font color="blue">{formatted_msg}</font><br>')
+        except Exception as e:
+            log_print(f"Can_Recv_Print_Blue : {str(e)}")
+
     def handle_all_can_data(self, all_data_str):
+        name_index = 0
         try:
             log_print("Received all CAN data:", type(all_data_str),all_data_str)
 
+            self.Can_Recv_Print_Blue(all_data_str)
 
             all_data_str = self.trim_hex(all_data_str)
 

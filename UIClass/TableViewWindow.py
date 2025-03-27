@@ -31,7 +31,13 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
             #List[Dict[str, str | int]]
             #self.local_field, self.row_len , self.col_len = self.execler.excel_deal(sheetname[0])
 
-
+            self.local_radio_buttons = [
+                self.radioButton_fast, self.radioButton_slow,
+                self.radioButton_0, self.radioButton_1, self.radioButton_2,
+                self.radioButton_3, self.radioButton_4, self.radioButton_5,
+                self.radioButton_6, self.radioButton_7, self.radioButton_8,
+                self.radioButton_9, self.radioButton_12, self.radioButton_13
+            ]
 
             #############################################
 
@@ -177,7 +183,9 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
     def show_parsed_data(self, hex_data , name_index):
         try:
             # 解析数据
-            parsed_data = self.execler.parse_can_data(hex_data ,self.sheetnames[name_index])
+            parsed_data = None
+            parsed_data_back =None
+            parsed_data ,parsed_data_back ,back_sheet_slot= self.execler.parse_can_data(hex_data ,self.sheetnames[name_index])
             # 填充数据到第二列
             for row_idx, data in enumerate(parsed_data):
                 value = str(data["value"])
@@ -192,6 +200,25 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
                 value_hex_item.setTextAlignment(Qt.AlignCenter)
                 # 如果当前行存在则更新第二列数据，不存在则添加新行
                 self.sheet_models.get(name_index).setItem(row_idx, 3, value_hex_item)  # 第一列
+
+            if  parsed_data_back is not None:#第二次
+                for row_idx, data in enumerate(parsed_data_back):
+                    value = str(data["value"])
+                    value_item = QStandardItem(value)
+                    value_item.setTextAlignment(Qt.AlignCenter)
+                    # 如果当前行存在则更新第二列数据，不存在则添加新行
+                    self.sheet_models.get(back_sheet_slot).setItem(row_idx, 1, value_item)  # 第一列
+
+                    value_hex = str(hex(data["value"]))
+                    value_hex_item = QStandardItem(value_hex)
+                    value_hex_item.setTextAlignment(Qt.AlignCenter)
+                    # 如果当前行存在则更新第二列数据，不存在则添加新行
+                    self.sheet_models.get(back_sheet_slot).setItem(row_idx, 3, value_hex_item)  # 第一列
+
+
+                    self.local_radio_buttons[back_sheet_slot].setChecked(True)  # 这会自动触发绑定的_switch_page方法
+
+
         except Exception as e:
             log_print(f"显示数据出错: {str(e)}")
 
@@ -291,3 +318,21 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
             self.radioButton_9, self.radioButton_12, self.radioButton_13
         ]
         return radio_buttons[index].text() if index < len(radio_buttons) else "未知视图"
+
+    # 新增辅助方法
+    def _update_sheet_model(self, sheet_index, data_list):
+        """通用模型更新方法"""
+        model = self.sheet_models.get(sheet_index)
+        if not model:
+            return
+
+        for row_idx, data in enumerate(data_list):
+            # 更新数值列
+            value_item = QStandardItem(str(data["value"]))
+            value_item.setTextAlignment(Qt.AlignCenter)
+            model.setItem(row_idx, 1, value_item)
+
+            # 更新16进制列
+            hex_item = QStandardItem(hex(data["value"]))
+            hex_item.setTextAlignment(Qt.AlignCenter)
+            model.setItem(row_idx, 3, hex_item)
