@@ -273,6 +273,10 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
         tableView.resizeColumnsToContents()
         tableView.verticalHeader().setDefaultSectionSize(40)
         tableView.horizontalHeader().setDefaultSectionSize(200)
+        #最后一列宽度自适应
+
+
+
         tableView.setAlternatingRowColors(True)
         tableView.setEditTriggers(QtWidgets.QTableView.NoEditTriggers)
 
@@ -280,7 +284,8 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
         tableView.verticalHeader().setSectionResizeMode(QHeaderView.Interactive)  # 允许手动调整
         tableView.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)  # 允许手动调整
         tableView.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        #self.tableView.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+
+        #tableView.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
 
 
 
