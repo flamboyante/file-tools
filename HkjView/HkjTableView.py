@@ -1,10 +1,9 @@
 from PyQt5.QtWidgets import QTableView,QMenu, QFileDialog
 from PyQt5.QtCore import QPropertyAnimation, QEasingCurve , Qt# 移动到此位置
 
-from siui.core import SiGlobal, SiColor, Si
+from siui.core import SiGlobal, SiColor
 from siui.gui.color_group import SiColorGroup
-from siui.gui import SiFont
-from siui.components.menu import SiMenu
+
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
 import os

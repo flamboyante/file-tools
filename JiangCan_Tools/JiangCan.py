@@ -3,7 +3,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 from logging_config import  log_print
 import threading
 import time
-from Can_Frame_Deal.Model_Data import HexDataDeal
+
 # JCANThread 控制台线程
 class JCANThread(QThread):
     signal_Can_Recv_Msg = pyqtSignal(str)

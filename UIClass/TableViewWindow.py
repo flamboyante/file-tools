@@ -1,14 +1,14 @@
-import sys
+
 
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import Qt, QAbstractTableModel
+from PyQt5.QtCore import Qt
 
-from PyQt5.QtWidgets import QApplication, QTableView, QWidget, QVBoxLayout, QTableWidgetItem, QHeaderView
+from PyQt5.QtWidgets import QHeaderView
 
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
 from PyQt5.QtWidgets import QMainWindow
-from siui.components.widgets.table import SiTableView
+
 
 from HkjView.HkjTableView import HkjTableView
 from Pyqt5_UI.MainWindow_Frame_ui import Ui_MainWindow

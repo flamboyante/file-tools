@@ -1,8 +1,7 @@
-import ctypes
-import tkinter
+
 from ctypes import *
 from enum import Enum
-from JiangCan_Tools.JiangCan import JCANThread
+
 
 # from ctypes import cdll, c_ushort, c_byte, c_uint, c_ubyte
 

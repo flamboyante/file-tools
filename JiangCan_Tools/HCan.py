@@ -2,7 +2,7 @@
 from PyQt5.QtCore import QThread,pyqtSignal
 from logging_config import  log_print
 import threading
-import time
+
 class HSendThread(QThread):
     def __init__(self, parent=None, send_flag=False, times=1, interval=1000, dev=None, ycyk_type='快遥'):
         super().__init__(parent)

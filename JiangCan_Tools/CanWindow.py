@@ -8,7 +8,7 @@ from JiangCan_Tools.ECAN import ECAN, STATUS_OK, BaudRate
 from logging_config import  log_print
 
 from JiangCan_Tools.JiangCan import JCANThread
-from Can_Frame_Deal.Model_Data import HexDataDeal
+
 
 from UIClass.TableViewWindow import TableView_MainWindow
 class CanWindow(QDialog, can_ui.Ui_CanForm):
