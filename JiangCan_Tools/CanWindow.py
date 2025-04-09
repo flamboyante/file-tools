@@ -63,8 +63,8 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
             dev_key = self.comboBox_Type.currentText()
             dev_val = self.type_map.get(dev_key)
             log_print("dev_key is",dev_key , "dev_val is" ,dev_val)
-            localFilePath = os.path.join(os.getcwd(), '.\\JiangCan_Tools\\ECanVci64.dll')
-            self.can_dev = ECAN(dev_val, 0, 0, localFilePath)
+            #localFilePath = os.path.join(os.getcwd(), '.\\JiangCan_Tools\\ECanVci64.dll')
+            self.can_dev = ECAN(dev_val, 0, 0, '.\\dist\\Can_Frame_Deal\\ECanVci64.dll')
             self.can_dev.open()
             if self.can_dev.is_open:
                 self.textEdit_Info.append("CAN open OK")
