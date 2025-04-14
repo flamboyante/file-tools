@@ -47,7 +47,7 @@ class ReadFileWork(QThread):
             log_print("Read work thread id is ", threading.currentThread().ident)
 
             if ord(self.flash) > 0x0b:
-                self.FileLengthOnce = 256
+                self.FileLengthOnce = 1024
 
             log_print("self.FileLengthOnce  is ", self.FileLengthOnce)
 

@@ -21,36 +21,14 @@ class ReadWindow(QDialog, Ui_FlashRead):
         self.value_mem_byte = bytes(0x00)
         self.work: ReadFileWork = None
 
-        self.flash_value_mapping = {
-            "SLOT0":  0x00,
-            "SLOT1": 0x01,
-            "SLOT2": 0x02,
-            "SLOT3": 0x03,
-            "SLOT4": 0x04,
-            "SLOT5": 0x05,
-            "B_SLOT6": 0x06,
-            "B_SLOT7": 0x07,
-            "B_SLOT8": 0x08,
-            "BMU_DIR": 0x09,
-            "BMU_UPDATE": 0x0A,
-            "BMU_RECOVERY": 0x0B,
-            "KA_BS0_CPUA": 0X0C,
-            "KA_BS1_CPUA": 0X0D,
-            "KA_BS2_CPUA": 0X0E,
-            "KA_BS3_CPUA": 0X0F,
-            "KA_BS0_CPUB": 0X10,
-            "KA_BS1_CPUB": 0X11,
-            "KA_BS2_CPUB": 0X12,
-            "KA_BS3_CPUB": 0X13,
-            "SC_BS0_CPUA": 0X14,
-            "SC_BS1_CPUA": 0X15,
-            "SC_BS0_CPUB": 0X16,
-            "SC_BS1_CPUB": 0X17,
-        }
 
         self.mem_value_mapping = {
-            "低地址": 0x00,
-            "高地址": 0x01,
+            "主 PLP0 Flash0(默认)": 0x05,
+            "主 PLP1 Flash2(默认)": 0x87,
+        }
+        self.flash_value_mapping = {
+            "基带":      0xFF,
+            "SC":       0xFA,
         }
 
         self.init_window()

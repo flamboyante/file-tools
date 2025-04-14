@@ -14,7 +14,7 @@ class Ycyk_422_Work():
         # 初始化命令计数器
         self.cmd_count = 0
         # 定义帧的大小，单位可能是字节
-        self.frame_size = 512
+        self.frame_size = 1000
         # 定义帧的数量
         self.frames = 10
         # 计算总的段大小，等于帧的数量乘以帧大小
@@ -30,13 +30,9 @@ class Ycyk_422_Work():
         self.flash = 0
 
     def check_apid(self, array):
-        if self.flash is 0xc0:
-            self.apid = 0x21
-        elif self.flash is 0xc1:
-            self.apid = 0x26
-        elif self.flash is 0xc2:
+        if self.flash is 0xFA:
             self.apid = 0x1D
-        else:
+        elif self.flash is 0xFF:
             self.apid =0x18
         array[2] = (array[2] & 0b11111000) | ((self.apid >>4) & 0b00001111)
         array[3] = (array[3] & 0b00001111) | (self.apid & 0b00001111) << 4
@@ -102,9 +98,7 @@ class Ycyk_422_Work():
         begin_array[5] |= (self.cmd_count & 0xff)
 
         self.check_apid(begin_array)
-        if self.apid == 0x1D:
-            flash = 0xff
-            mem = 0x11
+
 
         self.cmd_count += 1
         flash_byte = self.Int_to_bytes_struct(flash, 1)
@@ -155,10 +149,7 @@ class Ycyk_422_Work():
         begin_array[5] &= ~0xff
         begin_array[5] |= (self.cmd_count & 0xff)
         self.check_apid(begin_array)
-        if self.apid == 0x1D:
-            begin_array[10] = 0x1d
-            flash = 0xff
-            mem = 0x11
+
 
         self.cmd_count += 1
 

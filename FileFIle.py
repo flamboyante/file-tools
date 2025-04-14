@@ -57,34 +57,12 @@ class FlashDownWindow(QDialog, Ui_Form):
         self.flag = False
 
         self.mem_value_mapping = {
-            "主": 0x00,
-            "备": 0x01
+            "主 PLP0 Flash0(默认)": 0x05,
+            "主 PLP1 Flash2(默认)": 0x87,
         }
         self.flash_value_mapping = {
-            "KA_PLP0":      [[0x80, 0], [0x81, 0]],
-            "KA_PLP1":      [[0x81, 1], [0x80, 1]],
-            "FNP":          [[0x82, 0], [0x83, 0]],
-            "RESV":         [[0x83, 1], [0x82, 1]],
-            "SC_PLP0":      [[0x84, 0], [0x85, 0]],
-            "SC_PLP1":      [[0x85, 1], [0x84, 1]],
-            "KA_BS0_CPUA":  [[0X8a, 0], [0X8a, 0]],
-            "KA_BS1_CPUA":  [[0X8b, 0], [0X8b, 0]],
-            "KA_BS2_CPUA":  [[0X8c, 0], [0X8c, 0]],
-            "KA_BS3_CPUA":  [[0X8d, 0], [0X8d, 0]],
-            "KA_BS0_CPUB":  [[0X8E, 0], [0X8E, 0]],
-            "KA_BS1_CPUB":  [[0X8F, 0], [0X8F, 0]],
-            "KA_BS2_CPUB":  [[0X90, 0], [0X90, 0]],
-            "KA_BS3_CPUB":  [[0X91, 0], [0X91, 0]],
-            "SC_BS0_CPUA":  [[0X92, 0], [0X92, 0]],
-            "SC_BS1_CPUA":  [[0X93, 0], [0X93, 0]],
-            "SC_BS0_CPUB":  [[0X96, 0], [0X96, 0]],
-            "SC_BS1_CPUB":  [[0X97, 0], [0X97, 0]],
-            "BMU_DIR":      [[0x98, 0], [0x98, 0]],
-            "BMU_UPDATE":   [[0x99, 0], [0x99, 0]],
-            "BMU_GOLDEN":   [[0x9A, 0], [0x9A, 0]],
-            "KA TX":        [[0xc0, 0], [0xc0, 0]],
-            "KA RX":        [[0XC1, 0], [0XC1, 0]],
-            "SC":           [[0XC2, 0], [0XC2, 0]]
+            "基带":      0xFF,
+            "SC":       0xFA,
         }
 
         self.Init_FlashWindow()
@@ -164,12 +142,11 @@ class FlashDownWindow(QDialog, Ui_Form):
                 QMessageBox.warning(self, "警告", "未知flash部件")
                 return
             log_print(flash_value)
-            flash, address = flash_value[mem_value]
-            log_print(flash_value, hex(flash), hex(address))
+            log_print(flash_value, hex(flash_value))
 
         self.ProgressBar.setValue(0)  # 重置进度条
         self.TextEdit_DownPrint.append("erase flash ing ,please wait")
-        self.FileTransfer_Worker.file_start_signal.emit(self.fileName, flash, address)
+        self.FileTransfer_Worker.file_start_signal.emit(self.fileName, flash_value, mem_value)
         self.PushButton_BeginDown.setEnabled(False)
         self.PushButton_CancelDown.setText('暂停下载')
         self.PushButton_CancelDown.setEnabled(True)
