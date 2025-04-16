@@ -95,7 +95,8 @@ class ReadFileWork(QThread):
                     self.mutex.unlock()
                 log_print("读取完毕。")
                 self.Read_complete_signal.emit()
-        except Exception:
+        except Exception as e:
+            log_print("ReadFileWork error:", e)
             raise
 
     def validate_response_ack(self, length) -> bytes:
