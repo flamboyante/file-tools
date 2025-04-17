@@ -25,6 +25,15 @@ class ReadWindow(QDialog, Ui_FlashRead):
         self.mem_value_mapping = {
             "主 PLP0 Flash0(默认)": 0x05,
             "主 PLP1 Flash2(默认)": 0x87,
+            "主 BPPS OS Flash0(默认)": 0x12,
+            "主 BPPS APP Flash0(默认)": 0x02,
+            "主 BPPS CFG Flash0(默认)": 0x22,
+            "主 BPPKA OS Flash0(默认)": 0x13,
+            "主 BPPKA APP Flash0(默认)": 0x03,
+            "主 BPPKA CFG Flash0(默认)": 0x23,
+            "主 SCP OS Flash0(默认)": 0x10,
+            "主 SCP APP Flash0(默认)": 0x00,
+            "主 SCP CFG Flash0(默认)": 0x20,
         }
         self.flash_value_mapping = {
             "基带":      0xFF,

@@ -216,7 +216,7 @@ class TableView_MainWindow(QMainWindow ,Ui_MainWindow):
                     self.sheet_models.get(back_sheet_slot).setItem(row_idx, 3, value_hex_item)  # 第一列
 
 
-                    self.local_radio_buttons[back_sheet_slot].setChecked(True)  # 这会自动触发绑定的_switch_page方法
+                    #self.local_radio_buttons[back_sheet_slot].setChecked(True)  # 这会自动触发绑定的_switch_page方法
 
 
         except Exception as e:

@@ -16,7 +16,7 @@ class Ycyk_422_Work():
         # 定义帧的大小，单位可能是字节
         self.frame_size = 1000
         # 定义帧的数量
-        self.frames = 10
+        self.frames = 100
         # 计算总的段大小，等于帧的数量乘以帧大小
         self.segment_size = self.frames * self.frame_size
         # 初始化段计数器
