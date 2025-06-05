@@ -19,6 +19,8 @@ class ReadWindow(QDialog, Ui_FlashRead):
         self.ReadUpdateLength = 1024
         self.value_flash_byte = bytes(0x00)
         self.value_mem_byte = bytes(0x00)
+        self.value_read_len = int(0x00)
+        self.output_filename = f"readflash.bin"
         self.work: ReadFileWork = None
 
 
@@ -55,6 +57,10 @@ class ReadWindow(QDialog, Ui_FlashRead):
         self.comboBox_Flash.setCurrentIndex(0)
         self.progressBar.setValue(0)  # 重置进度条
 
+        self.comboBox_readLen.addItem("0x8000000")
+        self.comboBox_readLen.addItem("0x4000000")
+        self.comboBox_readLen.setCurrentIndex(0)
+
     def pause(self):
         log_print("Press read_pause")
         if self.pushButton_ReadInit.text() == '暂停读取':
@@ -73,7 +79,7 @@ class ReadWindow(QDialog, Ui_FlashRead):
                 self.pushButton_ReadInit.setEnabled(True)
                 self.pushButton_ReadCancel.setEnabled(True)
                 self.textEdit.append("Read begin!")
-                self.work = ReadFileWork(self.mainWindow.Serial_Worker.media, self.value_flash_byte, self.value_mem_byte, 0x4000000, "readflashnew.bin")
+                self.work = ReadFileWork(self.mainWindow.Serial_Worker.media, self.value_flash_byte, self.value_mem_byte, self.value_read_len, self.output_filename)
                 self.work.Read_processe_signal.connect(self.update_progress_bar)
                 self.work.read_bytes_signal.connect(self.update_test_view)
                 self.work.Read_complete_signal.connect(self.complete)
@@ -124,9 +130,16 @@ class ReadWindow(QDialog, Ui_FlashRead):
         self.value_mem_byte = mem_val.to_bytes(1, 'big')
         log_print("self.value_mem_byte", self.value_mem_byte)
 
+        self.value_read_len = int(self.comboBox_readLen.currentText(),16)
+        log_print(f"self.value_read_len is {type(self.value_read_len)} {self.value_read_len!r}")
+
+        self.output_filename = f"readflash_{flash_key}_{mem_key}.bin"
+        log_print("output_filename is ", self.output_filename)
+
         if not self.mainWindow.Serial_Worker.status:
             QMessageBox.warning(self, "警告", "串口通信未初始化,请重新操作")
             return False
+
 
         self.textEdit.append("ReadInit ok ,please begin read")
 
