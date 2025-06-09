@@ -68,6 +68,10 @@ class FlashDownWindow(QDialog, Ui_Form):
             "主 SCP OS Flash0(默认)": 0x10,
             "主 SCP APP Flash0(默认)": 0x00,
             "主 SCP CFG Flash0(默认)": 0x20,
+            "主 BMU UPDATE": 0x06,
+            "主 BMU DIR" : 0X36,
+            "主 BMU GOLDEN": 0x26,
+            "主 BMU IAP": 0x16,
         }
         self.flash_value_mapping = {
             "基带":      0xFF,
