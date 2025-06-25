@@ -6,6 +6,7 @@ from enum import Enum
 class MediaType(Enum):
     SERIAL = 1  # 串口接口
     ETHERNET = 2  # 以太接口
+    VLAN = 3    #VLAN接口
 
 
 # 通信接口基类

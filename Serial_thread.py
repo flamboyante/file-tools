@@ -8,6 +8,7 @@ from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QWaitCondition, QTimer
 from Media.Media import Media, MediaType
 from Media.SerialMedia import SerialMedia
 from Media.EthernetMedia import EthernetMedia
+from Media.VlanMedia import VlanMedia
 from ycyk_422 import Ycyk_422_Work
 from logging_config import  log_print
 import serial
@@ -46,8 +47,10 @@ class Serial_Worker(QThread):
         try:
             if type == MediaType.SERIAL:
                 self.slot_serial_init(args[0], args[1], args[2], args[3], args[4])
-            else:
+            elif type == MediaType.ETHERNET:
                 self.slot_ethernet_init('', args[0], args[1])
+            else:
+                self.slot_vlan_init('', args[0], args[1], args[2])
 
             self.media.open()
             if self.media.is_open:
@@ -69,6 +72,12 @@ class Serial_Worker(QThread):
     def slot_ethernet_init(self, ver: str, ip: str, port: int):
         try:
             self.media = EthernetMedia(ip, port)
+        except Exception:
+            raise
+
+    def slot_vlan_init(self, ver: str, ip: str, port: int, vlan_id: int):
+        try:
+            self.media = VlanMedia(ip, port, vlan_id)
         except Exception:
             raise
 

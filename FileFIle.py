@@ -8,11 +8,11 @@ import Media.Media
 
 from PowerControl import PowerControl
 from UIClass.BmuConsoleWindow import BmuConsoleWindow
-from JiangCan_Tools.CanWindow import CanWindow
+# from JiangCan_Tools.CanWindow import CanWindow
 from UIClass.FTPWindow import FTPWindow
 from UIClass.ReadWindow import ReadWindow
 
-from UIClass.TableViewWindow import TableView_MainWindow
+# from UIClass.TableViewWindow import TableView_MainWindow
 
 from WorkClass.BmuConsoleThread import BmuConsoleThread
 from new_mainwindows_ui import  Ui_MainWindow
@@ -292,7 +292,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.Enable_ComboBox_Controls(False)
                 self.tab_serial.setDisabled(True)
                 # port.encode('utf-8')
-                self.Serial_Worker.Sign_Serial_init.emit(Media.Media.MediaType.ETHERNET, ip, int(port), 0, '', '')
+                if self.checkBox_Vlan.isChecked() is True:
+                    vlan_id = self.lineEdit.text()
+                    self.Serial_Worker.Sign_Serial_init.emit(Media.Media.MediaType.VLAN, ip, int(port), int(vlan_id), '', '')
+                else:
+                    self.Serial_Worker.Sign_Serial_init.emit(Media.Media.MediaType.ETHERNET, ip, int(port), 0, '', '')
             else:
                 self.Enable_ComboBox_Controls(True)
                 self.tab_serial.setEnabled(True)
