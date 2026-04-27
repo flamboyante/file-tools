@@ -136,6 +136,44 @@
          <widget class="QWidget" name="layoutWidget">
           <layout class="QVBoxLayout" name="verticalLayout">
            <item>
+            <widget class="QCheckBox" name="checkBox_slice">
+             <property name="text">
+              <string>分段</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_3">
+             <property name="sizeConstraint">
+              <enum>QLayout::SetDefaultConstraint</enum>
+             </property>
+             <item>
+              <widget class="BodyLabel" name="BodyLabel_3">
+               <property name="text">
+                <string>帧长：</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="LineEdit" name="LineEdit_frame_len"/>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_4">
+             <item>
+              <widget class="BodyLabel" name="BodyLabel_4">
+               <property name="text">
+                <string>帧数：</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="LineEdit" name="LineEdit_seg_num"/>
+             </item>
+            </layout>
+           </item>
+           <item>
             <widget class="PrimaryPushButton" name="PrimaryPushButton_DownFlieInit">
              <property name="text">
               <string>下载初始化</string>

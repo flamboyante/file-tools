@@ -50,7 +50,7 @@ class Serial_Worker(QThread):
             elif type == MediaType.ETHERNET:
                 self.slot_ethernet_init('', args[0], args[1])
             else:
-                self.slot_vlan_init('', args[0], args[1], args[2])
+                self.slot_vlan_init('', args[0], args[1], args[2], args[3], args[4])
 
             self.media.open()
             if self.media.is_open:
@@ -75,9 +75,9 @@ class Serial_Worker(QThread):
         except Exception:
             raise
 
-    def slot_vlan_init(self, ver: str, ip: str, port: int, vlan_id: int):
+    def slot_vlan_init(self, ver: str, ip: str, port: int, vlan_id: int, des_mac: str, iface: str):
         try:
-            self.media = VlanMedia(ip, port, vlan_id)
+            self.media = VlanMedia(ip, port, vlan_id, des_mac, "以太网")
         except Exception:
             raise
 
@@ -177,7 +177,7 @@ class Serial_Worker(QThread):
 
 class FileTransfer_Work(QThread):
 
-    file_start_signal = pyqtSignal(str,int,int)
+    file_start_signal = pyqtSignal(str, int, int, bool,int, int)
     file_processe_signal = pyqtSignal(int)
     file_complete_signal = pyqtSignal()
     file_log_signal = pyqtSignal(str)
@@ -193,17 +193,20 @@ class FileTransfer_Work(QThread):
         self.LengthRecv = 13
         self.frame_resp = 0
         self.running = True
-        self.Ycyk_422_Worker = Ycyk_422_Work()
+        self.Ycyk_422_Worker = Ycyk_422_Work(id=0xEB90)
         self.number = 0
 
-    def file_start_slot(self, file_path, flash, mem):
+    def file_start_slot(self, file_path, flash, mem, divide, frame_len, frame_num):
         log_print("transfer_file  thread id is ", threading.currentThread().ident)
         log_print(file_path)
 
         # 发送文件
         try:
-            self.send_begin_frame(file_path, flash, mem)  # 头帧a
-            log_print("send_begin_frame Validation Pass !")
+            if divide is True:
+                self.send_begin_frame(file_path, flash, mem, 0x03, frame_len, frame_num)  # 头帧a
+            else:
+                self.send_begin_frame(file_path, flash, mem, 0x00, frame_len, frame_num)  # 头帧a
+            log_print("send_begin_frame Validation Pass, divide: " + str(divide) + ", length: " + str(frame_len) + ", number: " + str(frame_num))
         except ValueError as e:
             log_print("send_begin_frame ValueError occurred:", e)
             self.file_exception_signal.emit(e, traceback.format_exc())
@@ -304,7 +307,7 @@ class FileTransfer_Work(QThread):
     # 发送开始重构帧
     def send_refactor_begin_frame(self, flash, mem):
         try:
-            refactor_begin_frame_byte = self.Ycyk_422_Worker.refactor_begin(flash, mem)
+            refactor_begin_frame_byte = self.Ycyk_422_Worker.refactor_begin(0x18, flash, mem)
             refactor_begin_frame_hex = refactor_begin_frame_byte.hex(' ')
             self.file_log_signal.emit(f'send begin frame: {refactor_begin_frame_hex}')
             log_print(refactor_begin_frame_hex)
@@ -315,9 +318,9 @@ class FileTransfer_Work(QThread):
             raise
 
     # 发送开始帧
-    def send_begin_frame(self, filePath, flash, mem):
+    def send_begin_frame(self, file_path, flash, mem, divide, frame_len, frame_num):
         try:
-            send_begin_frame_byte = self.Ycyk_422_Worker.Send_begin(filePath, flash, mem)
+            send_begin_frame_byte = self.Ycyk_422_Worker.send_begin(0x18, file_path, flash, mem, divide, frame_len, frame_num)
             self.serial_worker.media.send(send_begin_frame_byte)
             send_begin_frame_hex = send_begin_frame_byte.hex(' ')
             self.file_log_signal.emit(f'send begin frame: {send_begin_frame_hex}')
@@ -367,10 +370,12 @@ class FileTransfer_Work(QThread):
             except Exception as e:
                 log_print('send_file error:', e)
                 raise
-            self.Ycyk_422_Worker.file_count += 1
+            # self.Ycyk_422_Worker.file_count += 1
             self.transferredSize += len
+            # time.sleep(0.1)
+            self.file_processe_signal.emit(self.transferredSize)
             log_print("send_file_frame_byte transfer times is ", i, "/", self.Ycyk_422_Worker.frames - 1, f', len: {len}')
-        self.file_processe_signal.emit(self.transferredSize)
+        # self.file_processe_signal.emit(self.transferredSize)
 
     # 发送一帧数据
     def send_file_frame(self, f, segment, frame):
@@ -380,24 +385,23 @@ class FileTransfer_Work(QThread):
             return 0
 
         if self.Ycyk_422_Worker.frames is 1:  # 每段只有一帧数据
-            send_file_frame_byte = self.Ycyk_422_Worker.Send_datas(segment, 3, file_data)
+            send_file_frame_byte = self.Ycyk_422_Worker.send_datas(0x18, segment, 3, file_data)
         else:
             if segment == self.Ycyk_422_Worker.segments - 1:
                 frames = self.Ycyk_422_Worker.segments_end_frames
-
             else:
                 frames = self.Ycyk_422_Worker.frames
 
             if frames == 1:
-                send_file_frame_byte = self.Ycyk_422_Worker.Send_datas(segment, 3, file_data)
+                send_file_frame_byte = self.Ycyk_422_Worker.send_datas(0x18, segment, 3, file_data)
             else:
                 if frame is 0:  # 首帧
-                    send_file_frame_byte = self.Ycyk_422_Worker.Send_datas(segment, 1, file_data)
+                    send_file_frame_byte = self.Ycyk_422_Worker.send_datas(0x18, segment, 1, file_data)
 
                 elif frame == frames - 1:  # 最后一帧
-                    send_file_frame_byte = self.Ycyk_422_Worker.Send_datas(segment, 2, file_data)
+                    send_file_frame_byte = self.Ycyk_422_Worker.send_datas(0x18, segment, 2, file_data)
                 else:  # 中间帧
-                    send_file_frame_byte = self.Ycyk_422_Worker.Send_datas(segment, 0, file_data)
+                    send_file_frame_byte = self.Ycyk_422_Worker.send_datas(0x18, segment, 0, file_data)
             first_20_bytes = send_file_frame_byte[:20]
             first_20_hex = first_20_bytes.hex(' ')
             log_print(first_20_hex)
@@ -407,7 +411,7 @@ class FileTransfer_Work(QThread):
 
     def send_finish_frame(self):
         try:
-            send_finish_frame_byte = self.Ycyk_422_Worker.Send_Finish()
+            send_finish_frame_byte = self.Ycyk_422_Worker.send_finish(0x18)
             self.serial_worker.media.send(send_finish_frame_byte)
             log_print("send_finish_frame transfer completed.")
             send_finish_frame_hex = send_finish_frame_byte.hex(' ')

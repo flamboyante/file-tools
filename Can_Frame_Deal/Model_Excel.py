@@ -89,24 +89,24 @@ class Model_Excel_Task():
         sheet_slot = 0
         sheet_slot_name = None
         try:
-            log_print("parse_can_data : parse_can_datas",type(data_str),data_str)
+            # log_print("parse_can_data : parse_can_datas",type(data_str),data_str)
             data_hex = list(bytes.fromhex(data_str))  # 返回的是bytes对象，用list()转为列表
-            log_print("parse_can_data :data_hex:", type(data_hex), data_hex)
+            # log_print("parse_can_data :data_hex:", type(data_hex), data_hex)
             if(name == "woshishabi"):
                 #for i in range(len(data_hex)):
                 #    log_print("data_hex[i] is",i,"--",data_hex[i])
-                log_print("woshishabi")
-                log_print("ID is",data_hex[78] << 8 | data_hex[79])
-                log_print("slot is" , data_hex[82])
+                # log_print("woshishabi")
+                # log_print("ID is",data_hex[78] << 8 | data_hex[79])
+                # log_print("slot is" , data_hex[82])
                 slot = data_hex[82] # 自动获取slot值
                 if slot > 9:
                     sheet_slot = slot
                 else:
                     sheet_slot = slot + 2
                 sheet_slot_name = self.wbsheet_names[sheet_slot]
-                log_print("sheet_slot is ",sheet_slot)
+                # log_print("sheet_slot is ",sheet_slot)
                 flag = 1  # 自动激活二次解析
-                log_print("self.wbsheet_names[slot]",self.wbsheet_names[sheet_slot])
+                # log_print("self.wbsheet_names[slot]",self.wbsheet_names[sheet_slot])
 
             # 第一阶段：主解析表
             binary_data = bin(int(data_str.replace(" ", ""), 16))[2:].zfill(len(data_str.replace(" ", "")) * 4)
@@ -122,22 +122,22 @@ class Model_Excel_Task():
                     "name": field["name"],
                     "value": value,
                 })
-                log_print(f"主表 解析字段 {field['name']}，值：{value}","start bit - end bit ",start,end)
+                # log_print(f"主表 解析字段 {field['name']}，值：{value}","start bit - end bit ",start,end)
                 parsed_bits = end  # 记录解析进度
-            log_print("最终主表parsed_bits:", parsed_bits)
-            log_print("最终主表解析数据:", parsed_data)
+            # log_print("最终主表parsed_bits:", parsed_bits)
+            # log_print("最终主表解析数据:", parsed_data)
                 # 第二阶段：条件解析
             if flag == 1 and sheet_slot_name and sheet_slot_name in self.sheet_fields:
                 parsed_data_back = []
                 remaining_bits = total_bits - parsed_bits
                 parsed_bits_back = parsed_bits
-                log_print(f"开始二次解析，剩余位数：{remaining_bits}，使用表：{sheet_slot_name}")
+                # log_print(f"开始二次解析，剩余位数：{remaining_bits}，使用表：{sheet_slot_name}")
                 for field in self.sheet_fields[sheet_slot_name]:
                     start2 = parsed_bits + field["start_bits"]
                     end2 = start2 + field["bits"]
 
                     if end2 > total_bits:
-                        log_print(f"字段 {field['name']} 超出数据范围，终止解析","total_bits is ",total_bits)
+                        # log_print(f"字段 {field['name']} 超出数据范围，终止解析","total_bits is ",total_bits)
                         break
 
                     value = int(binary_data[start2:end2], 2)
@@ -145,14 +145,14 @@ class Model_Excel_Task():
                         "name": f"{sheet_slot_name}.{field['name']}",  # 添加命名空间
                         "value": value,
                     })
-                    log_print(f"副表 解析字段 {field['name']}，值：{value}","start bit - end bit -bits ",start2,end2 ,field["bits"])
+                    # log_print(f"副表 解析字段 {field['name']}，值：{value}","start bit - end bit -bits ",start2,end2 ,field["bits"])
                     parsed_bits_back = end2
-                log_print("最终副表parsed_bits:", parsed_bits_back)
-                log_print("最终副表解析bit:", parsed_bits_back - parsed_bits)
-                log_print("最终副表解析数据:", parsed_data_back)
+                # log_print("最终副表parsed_bits:", parsed_bits_back)
+                # log_print("最终副表解析bit:", parsed_bits_back - parsed_bits)
+                # log_print("最终副表解析数据:", parsed_data_back)
                 return parsed_data ,parsed_data_back,sheet_slot
 
-            log_print("最终解析数据:", parsed_data)
+            # log_print("最终解析数据:", parsed_data)
             return parsed_data , None ,0
 
         except Exception as e:

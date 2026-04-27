@@ -95,50 +95,63 @@ class ERR_INFO(Structure):
 
 
 class ECAN(object):
-    def __init__(self, dev_type: c_uint, index: c_uint, channel: c_uint, dll_path: str):
-        self.type = dev_type                    # 设备类型
-        self.index = index                      # 设备索引
-        self.channel = channel                  # 设备通道
-        self.dll_path = dll_path                # DLL路径
-        self.dll = None                         # DLL
-        self.is_open = False
-        self.err_code = 0
-        log_print("self.dll_path is ",self.dll_path)
-        self.dll = cdll.LoadLibrary(self.dll_path)  # 加载DLL
-        if self.dll is None:
-            self.is_open = False
-            log_print(f"DLL Couldn't be loaded, path: {self.dll_path}")
+    is_open = False         # 设备是否打开
+    type = 0                # 设备类型
+    index = 0               # 设备索引
+    dll_path = None         # DLL路径
+    dll = None              # DLL
 
-    def open(self):
+    def __init__(self, channel: c_uint):
+        self.channel = channel                  # 设备通道
+        self.err_code = 0
+        self.tx_cnt = 0
+
+    @classmethod
+    def open(cls, dev_type: c_uint, dev_index: c_uint, dll_path: str):
         try:
-            if not self.is_open:
-                if self.dll is None:
-                    self.is_open = False
+            log_print("self.dll_path is ", dll_path)
+            if not cls.is_open:
+                cls.dll = cdll.LoadLibrary(dll_path)  # 加载DLL
+                if cls.dll is None:
+                    cls.is_open = False
                 else:
-                    ret = self.dll.OpenDevice(self.type, self.index, 0)     # 打开设备
+                    ret = cls.dll.OpenDevice(dev_type, dev_index, 0)     # 打开设备
                     if ret != STATUS_OK:
-                        self.is_open = False
+                        cls.is_open = False
                     else:
-                        self.is_open = True
+                        cls.type = dev_type
+                        cls.index = dev_index
+                        cls.is_open = True
         except Exception as e:
             log_print(f"ECAN.open : {str(e)}")
             raise
 
-    def close(self):
+    @classmethod
+    def close(cls):
         try:
-            if self.is_open:
-                ret = self.dll.CloseDevice(self.type, self.index, 0)
+            if cls.is_open:
+                ret = cls.dll.CloseDevice(cls.type, cls.index, 0)
                 if ret != STATUS_OK:
-                    self.is_open = True
+                    cls.is_open = True
                 else:
-                    self.is_open = False
+                    cls.is_open = False
         except Exception:
             print("Exception on CloseDevice!")
             raise
 
+    @classmethod
+    def info(cls):
+        try:
+            board_info = BoardInfo()
+            ret = ECAN.dll.ReadBoardInfo(cls.type, cls.index, byref(board_info))
+            return board_info, ret
+        except Exception:
+            print("Exception on ReadBoardInfo!")
+            raise
+
     def config(self, baud: BaudRate) -> bool:
         try:
-            if not self.is_open:
+            if not ECAN.is_open:
                 return False
 
             timing_map = {
@@ -161,7 +174,7 @@ class ECAN(object):
             config.timing0, config.timing1 = timing_map.get(baud)
             log_print("config.timing0, config.timing1",config.timing0, hex(config.timing1))
             config.mode = 0
-            ret = self.dll.InitCAN(self.type, self.index, self.channel, byref(config))
+            ret = ECAN.dll.InitCAN(ECAN.type, ECAN.index, self.channel, byref(config))
             if ret != STATUS_OK:
                 return False
             return True
@@ -171,10 +184,10 @@ class ECAN(object):
 
     def start(self) -> bool:
         try:
-            if not self.is_open:
+            if not ECAN.is_open:
                 return False
 
-            ret = self.dll.StartCAN(self.type, self.index, self.channel)
+            ret = ECAN.dll.StartCAN(ECAN.type, ECAN.index, self.channel)
             if ret != STATUS_OK:
                 return False
             return True
@@ -182,172 +195,30 @@ class ECAN(object):
             print("Exception on StartCan!")
             raise
 
-    def info(self):
-        try:
-            board_info = BoardInfo()
-            ret = self.dll.ReadBoardInfo(self.type, self.index, byref(board_info))
-            return board_info, ret
-        except Exception:
-            print("Exception on ReadBoardInfo!")
-            raise
-
-    '''
-    def receive(self) -> JCan_MSG:
-        try:
-            obj = CAN_OBJ()
-            ret = self.dll.Receive(self.type, self.index, self.channel, byref(obj), c_uint16(1), 0)
-            if ret != STATUS_OK:
-                return None
-            msg = JCan_MSG()
-            msg.id = obj.ID
-            msg.remote_flag = obj.RemoteFlag
-            msg.extend_flag = obj.ExternFlag
-            msg.dlc = obj.DataLen
-            msg.data = obj.data
-            return msg
-        except Exception:
-            print("Exception on Receive!")
-            raise
-
-    def transmit(self, msg: JCan_MSG) -> bool:
-        try:
-            obj = CAN_OBJ()
-            obj.SendType = c_byte(2)
-            obj.ID = c_uint(msg.id)
-            obj.RemoteFlag = c_byte(msg.remote_flag)
-            obj.ExternFlag = c_byte(msg.extend_flag)
-            obj.DataLen = c_byte(msg.dlc)
-            for i in range(0, msg.dlc):
-                obj.data[i] = c_ubyte(msg.data[i])
-            for i in range(msg.dlc, 8):
-                obj.data[i] = c_ubyte(0)
-            print(obj.data[0], obj.data[1], obj.data[2], obj.data[3])
-            print(self.type, self.index, self.channel)
-            ret = self.dll.Transmit(self.type, self.index, self.channel, byref(obj), c_uint16(1))
-            print(f'ret: {ret}')
-            if ret != 1:
-                return False
-            return True
-        except Exception:
-            print("Exception on Transmit!")
-            raise
-'''
-
-
     def get_err_info(self) -> str:
         try:
             err_info = ERR_INFO()
-            ret = self.dll.ReadErrInfo(self.type, self.index, self.channel, byref(err_info))
+            ret = ECAN.dll.ReadErrInfo(ECAN.type, ECAN.index, self.channel, byref(err_info))
             if ret != STATUS_OK:
                 return ''
             # print(str(hex(err_info.Err_Code)))
-            return str(f'{hex(err_info.Err_Code)}')
+            return str(f'{hex(err_info.ErrCode)}')
         except Exception:
             raise
 
-
-
-    def Tramsmit(self, DeviceType, DeviceIndex, CanInd, mcanobj):
+    def transmit(self, can_obj):
         try:
-            # mCAN_OBJ=CAN_OBJ*2
-            # self.dll.Transmit.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32, POINTER(CAN_OBJ),
-            # ctypes.c_uint16]
-            return self.dll.Transmit(DeviceType, DeviceIndex, CanInd, byref(mcanobj), c_uint16(1))
-        except:
-            print("Exception on Tramsmit!")
+            self.tx_cnt = self.tx_cnt + 1
+            return ECAN.dll.Transmit(ECAN.type, ECAN.index, self.channel, byref(can_obj), c_uint16(1))
+        except Exception:
+            print("Exception on Transmit!")
             raise
 
-    def Receivce(self, DeviceType, DeviceIndex, CanInd, length):
+    def receive(self, length):
         try:
-            recmess = (CAN_OBJ * length)()
-            ret = self.dll.Receive(DeviceType, DeviceIndex, CanInd, byref(recmess), length, 0)
-            return length, recmess, ret
-        except:
+            can_obj = (CAN_OBJ * length)()
+            ret = ECAN.dll.Receive(ECAN.type, ECAN.index, self.channel, byref(can_obj), length, 0)
+            return length, can_obj, ret
+        except Exception:
             print("Exception on Receive!")
             raise
-
-    def send_msg_for_fast_test(self):
-        canobj = CAN_OBJ()
-        canobj.ID = int(0x31801)
-        canobj.DataLen = int(3)
-        canobj.data[0] = int(0)
-        canobj.data[1] = int(90)
-        canobj.data[2] = int(90)
-        canobj.data[3] = int(0)
-        canobj.data[4] = int(0)
-        canobj.data[5] = int(0)
-        canobj.data[6] = int(0)
-        canobj.data[7] = int(0)
-        canobj.RemoteFlag = int(0)
-        canobj.ExternFlag = int(1)
-        print("canobj.ID",type(canobj.ID),":",canobj.ID)
-        print("canobj.DataLen", type(canobj.DataLen), ":", canobj.DataLen)
-        print("canobj.data[0]", type(canobj.data[0]), ":", canobj.data[0])
-        print("canobj.data[1]", type(canobj.data[1]), ":", canobj.data[1])
-        print("canobj.data[2]", type(canobj.data[2]), ":", canobj.data[2])
-        print("canobj.data[3]", type(canobj.data[3]), ":", canobj.data[3])
-        print("canobj.data[4]", type(canobj.data[4]), ":", canobj.data[4])
-        print("canobj.data[5]", type(canobj.data[5]), ":", canobj.data[5])
-        print("canobj.data[6]", type(canobj.data[6]), ":", canobj.data[6])
-        print("canobj.data[7]", type(canobj.data[7]), ":", canobj.data[7])
-        print("canobj.RemoteFlag",type(canobj.RemoteFlag),":",canobj.RemoteFlag)
-        print("canobj.ExternFlag", type(canobj.ExternFlag), ":", canobj.ExternFlag)
-        self.Tramsmit(USBCAN2, DevIndex, Channel1, canobj)
-
-    def send_msg_for_slow_test(self):
-        canobj = CAN_OBJ()
-        canobj.ID = int(0x31801)
-        canobj.DataLen = int(3)
-        canobj.data[0] = int(0)
-        canobj.data[1] = int(0xaa)
-        canobj.data[2] = int(0xaa)
-        canobj.data[3] = int(0)
-        canobj.data[4] = int(0)
-        canobj.data[5] = int(0)
-        canobj.data[6] = int(0)
-        canobj.data[7] = int(0)
-        canobj.RemoteFlag = int(0)
-        canobj.ExternFlag = int(1)
-        print("canobj.ID",type(canobj.ID),":",canobj.ID)
-        print("canobj.DataLen", type(canobj.DataLen), ":", canobj.DataLen)
-        print("canobj.data[0]", type(canobj.data[0]), ":", canobj.data[0])
-        print("canobj.data[1]", type(canobj.data[1]), ":", canobj.data[1])
-        print("canobj.data[2]", type(canobj.data[2]), ":", canobj.data[2])
-        print("canobj.data[3]", type(canobj.data[3]), ":", canobj.data[3])
-        print("canobj.data[4]", type(canobj.data[4]), ":", canobj.data[4])
-        print("canobj.data[5]", type(canobj.data[5]), ":", canobj.data[5])
-        print("canobj.data[6]", type(canobj.data[6]), ":", canobj.data[6])
-        print("canobj.data[7]", type(canobj.data[7]), ":", canobj.data[7])
-        print("canobj.RemoteFlag",type(canobj.RemoteFlag),":",canobj.RemoteFlag)
-        print("canobj.ExternFlag", type(canobj.ExternFlag), ":", canobj.ExternFlag)
-        self.Tramsmit(USBCAN2, DevIndex, Channel1, canobj)
-
-
-    def send_msg_for_nosfc_test(self):
-        canobj = CAN_OBJ()
-        canobj.ID = int(0x31803)
-        canobj.DataLen = int(3)
-        canobj.data[0] = int(0)
-        canobj.data[1] = int(0xaa)
-        canobj.data[2] = int(0xaa)
-        canobj.data[3] = int(0)
-        canobj.data[4] = int(0)
-        canobj.data[5] = int(0)
-        canobj.data[6] = int(0)
-        canobj.data[7] = int(0)
-        canobj.RemoteFlag = int(0)
-        canobj.ExternFlag = int(1)
-        print("canobj.ID",type(canobj.ID),":",canobj.ID)
-        print("canobj.DataLen", type(canobj.DataLen), ":", canobj.DataLen)
-        print("canobj.data[0]", type(canobj.data[0]), ":", canobj.data[0])
-        print("canobj.data[1]", type(canobj.data[1]), ":", canobj.data[1])
-        print("canobj.data[2]", type(canobj.data[2]), ":", canobj.data[2])
-        print("canobj.data[3]", type(canobj.data[3]), ":", canobj.data[3])
-        print("canobj.data[4]", type(canobj.data[4]), ":", canobj.data[4])
-        print("canobj.data[5]", type(canobj.data[5]), ":", canobj.data[5])
-        print("canobj.data[6]", type(canobj.data[6]), ":", canobj.data[6])
-        print("canobj.data[7]", type(canobj.data[7]), ":", canobj.data[7])
-        print("canobj.RemoteFlag",type(canobj.RemoteFlag),":",canobj.RemoteFlag)
-        print("canobj.ExternFlag", type(canobj.ExternFlag), ":", canobj.ExternFlag)
-        self.Tramsmit(USBCAN2, DevIndex, Channel1, canobj)
-

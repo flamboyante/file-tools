@@ -5,10 +5,10 @@ from PyQt5.QtSerialPort import QSerialPortInfo
 import os
 
 import Media.Media
+from JiangCan_Tools.CanWindow import CanWindow
 
 from PowerControl import PowerControl
 from UIClass.BmuConsoleWindow import BmuConsoleWindow
-# from JiangCan_Tools.CanWindow import CanWindow
 from UIClass.FTPWindow import FTPWindow
 from UIClass.ReadWindow import ReadWindow
 
@@ -55,26 +55,54 @@ class FlashDownWindow(QDialog, Ui_Form):
 
         self.up_num = 0
         self.flag = False
+        self.divide = True
 
         self.mem_value_mapping = {
-            "主 PLP0 Flash0(默认)": 0x05,
-            "主 PLP1 Flash2(默认)": 0x87,
-            "主 BPPS OS Flash0(默认)": 0x12,
-            "主 BPPS APP Flash0(默认)": 0x02,
-            "主 BPPS CFG Flash0(默认)": 0x22,
-            "主 BPPKA OS Flash0(默认)": 0x13,
-            "主 BPPKA APP Flash0(默认)": 0x03,
-            "主 BPPKA CFG Flash0(默认)": 0x23,
-            "主 SCP OS Flash0(默认)": 0x10,
-            "主 SCP APP Flash0(默认)": 0x00,
-            "主 SCP CFG Flash0(默认)": 0x20,
-            "主 BMU UPDATE": 0x06,
-            "主 BMU DIR" : 0X36,
-            "主 BMU GOLDEN": 0x26,
-            "主 BMU IAP": 0x16,
+            "PLP0 Flash0(默认)": 0x05,
+            "PLP1 Flash0(默认)": 0x07,
+            "BBPS OS Flash0(默认)": 0x12,
+            "BBPS APP Flash0(默认)": 0x02,
+            "BBPS CFG Flash0(默认)": 0x22,
+            "BBPKA OS Flash0(默认)": 0x13,
+            "BBPKA APP Flash0(默认)": 0x03,
+            "BBPKA CFG Flash0(默认)": 0x23,
+            "SCP OS Flash0(默认)": 0x10,
+            "SCP APP Flash0(默认)": 0x00,
+            "SCP CFG Flash0(默认)": 0x20,
+            "BMU UPDATE": 0x06,
+            "BMU DIR" : 0X36,
+            "BMU GOLDEN": 0x26,
+            "BMU IAP": 0x16,
+            "PLP0 Flash1": 0x45,
+            "PLP0 Flash2": 0x85,
+            "PLP1 Flash1": 0x47,
+            "PLP1 Flash2": 0x87,
+            "BBPS OS Flash1": 0x52,
+            "BBPS APP Flash1": 0x42,
+            "BBPS CFG Flash1": 0x62,
+            "BBPS OS Flash2": 0x92,
+            "BBPS APP Flash2": 0x82,
+            "BBPS CFG Flash2": 0xA2,
+            "BBPKA OS Flash1": 0x53,
+            "BBPKA APP Flash1": 0x43,
+            "BBPKA CFG Flash1": 0x63,
+            "BBPKA OS Flash2": 0x93,
+            "BBPKA APP Flash2": 0x83,
+            "BBPKA CFG Flash2": 0xA3,
+            "SCP OS Flash1": 0x50,
+            "SCP APP Flash1": 0x40,
+            "SCP CFG Flash1": 0x60,
+            "SCP OS Flash2": 0x90,
+            "SCP APP Flash2": 0x80,
+            "SCP CFG Flash2": 0xA0,
+            "SCP EXC": 0x30,
+            "SCP ATA2": 0x70,
+            "BBPS EXC": 0x32,
+            "BBPKA EXC": 0x33,
         }
         self.flash_value_mapping = {
-            "基带":      0xFF,
+            "基带":      0xFB,
+            "基带2":     0x9B,
             "SC":       0xFA,
         }
 
@@ -85,8 +113,28 @@ class FlashDownWindow(QDialog, Ui_Form):
         self.ComboBox_Mem.addItems(self.mem_value_mapping.keys())
         self.ComboBox_Mem.setCurrentIndex(0)
         self.ComboBox_Flash.setCurrentIndex(0)
+
+        if self.divide is True:
+            self.checkBox_slice.setCheckState(Qt.Checked)
+        else:
+            self.LineEdit_frame_len.setEnabled(True)
+            self.LineEdit_seg_num.setEnabled(True)
+        self.checkBox_slice.stateChanged.connect(self.check_box_slice_changed)
+        self.LineEdit_frame_len.setText("1000")
+        self.LineEdit_seg_num.setText("1024")
+
         self.PushButton_CancelDown.setText('暂停下载')
         self.PushButton_CancelDown.setEnabled(False)
+
+    def check_box_slice_changed(self, state):
+        if state == Qt.Checked:
+            self.divide = True
+            self.LineEdit_frame_len.setEnabled(True)
+            self.LineEdit_seg_num.setEnabled(True)
+        else:
+            self.divide = False
+            self.LineEdit_frame_len.setEnabled(True)
+            self.LineEdit_seg_num.setEnabled(False)
 
     def InitFileTransfer(self):
         if self.mainWindow.Serial_Worker.status and not self.FileTransfer_Qthread:
@@ -157,9 +205,20 @@ class FlashDownWindow(QDialog, Ui_Form):
             log_print(flash_value)
             log_print(flash_value, hex(flash_value))
 
+        frame_len_str = self.LineEdit_frame_len.text()
+        if not frame_len_str:
+            frame_len = 1000
+        else:
+            frame_len = int(frame_len_str)
+        frame_num_str = self.LineEdit_seg_num.text()
+        if not frame_num_str:
+            frame_num = 1024
+        else:
+            frame_num = int(frame_num_str)
+
         self.ProgressBar.setValue(0)  # 重置进度条
         self.TextEdit_DownPrint.append("erase flash ing ,please wait")
-        self.FileTransfer_Worker.file_start_signal.emit(self.fileName, flash_value, mem_value)
+        self.FileTransfer_Worker.file_start_signal.emit(self.fileName, flash_value, mem_value, self.divide, frame_len, frame_num)
         self.PushButton_BeginDown.setEnabled(False)
         self.PushButton_CancelDown.setText('暂停下载')
         self.PushButton_CancelDown.setEnabled(True)
@@ -216,7 +275,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         log_print("new frame thread id is ", threading.currentThread().ident)
 
-        self.Ycyk_Worker = Ycyk_422_Work()
+        self.Ycyk_Worker = Ycyk_422_Work(id=0xEB90)
         self.serial_bmu_flag = False
 
         # self.Ycyk_Worker.send_heart()
@@ -294,7 +353,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # port.encode('utf-8')
                 if self.checkBox_Vlan.isChecked() is True:
                     vlan_id = self.lineEdit.text()
-                    self.Serial_Worker.Sign_Serial_init.emit(Media.Media.MediaType.VLAN, ip, int(port), int(vlan_id), '', '')
+                    des_mac = self.lineEdit_DstMac.text()
+                    iface = self.comboBox_iface.currentText()
+                    self.Serial_Worker.Sign_Serial_init.emit(Media.Media.MediaType.VLAN, ip, int(port), int(vlan_id), des_mac, iface)
                 else:
                     self.Serial_Worker.Sign_Serial_init.emit(Media.Media.MediaType.ETHERNET, ip, int(port), 0, '', '')
             else:
@@ -634,6 +695,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.table_window.show()
         except Exception as e:
             log_print(f"TableView_MainWindow初始化失败:{e}")
+
     def show_FlashDownWindow(self):
         # 在 MainWindow 类中，当创建 FlashDownWindow 时
         self.flashDownWindow = FlashDownWindow(self)

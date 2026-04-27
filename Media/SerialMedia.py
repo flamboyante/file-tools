@@ -46,7 +46,12 @@ class SerialMedia(Media):
 
     def recv(self, length) -> bytes:
         try:
-            data = self.serial.read(length)
+            data = b''
+            while True:
+                tmp = self.serial.read(length - len(data))
+                data += tmp
+                if len(data) >= length:
+                    break
         except Exception:
             data = None
         finally:

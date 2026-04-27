@@ -4,9 +4,9 @@ from enum import Enum
 
 # 通信接口定义
 class MediaType(Enum):
-    SERIAL = 1  # 串口接口
-    ETHERNET = 2  # 以太接口
-    VLAN = 3    #VLAN接口
+    SERIAL = 1      # 串口接口
+    ETHERNET = 2    # 以太接口
+    VLAN = 3        # VLAN接口
 
 
 # 通信接口基类
@@ -40,3 +40,4 @@ class Media(ABC):
     @abstractmethod
     def recv(self, length) -> bytes:
         pass
+    

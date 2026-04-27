@@ -31,9 +31,7 @@ class JCANThread(QThread):
     def run(self):
         try:
             while self.running:
-                len, rec, ret = self.CanDev.Receivce(self.CanDev.type,
-                                                     self.CanDev.index,
-                                                     self.CanDev.channel, 1)  # 收1个can帧
+                len, rec, ret = self.CanDev.receive(1)  # 收1个can帧
                 if len > 0 and ret == 1:
                     self.last_recv_time = time.time()  # 更新上一次接收到 CAN 帧的时间
                     mstr = "Rec: " + str(self.recv_num)
@@ -58,7 +56,7 @@ class JCANThread(QThread):
                         self.signal_Can_Recv_Msg.emit(mstr)
                     else:
                         mstr = mstr + " Type:Romte " + " Data: Remote Request"
-                    log_print("nbbbbbbbbbbb is", mstr)
+                    # log_print("nbbbbbbbbbbb is", mstr)
                 else:
                     # 检查是否达到空闲时间阈值
                     if time.time() - self.last_recv_time > self.idle_time_threshold:
@@ -78,7 +76,7 @@ class JCANThread(QThread):
         """
         from datetime import datetime
         try:
-            log_print("parse_timestamp is ", timestamp)
+            # log_print("parse_timestamp is ", timestamp)
             # 将时间戳转为秒（整除1000）和毫秒（取模1000）
             ts_seconds = timestamp // 1000
             milliseconds = timestamp % 1000
