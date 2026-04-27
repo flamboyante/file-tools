@@ -66,6 +66,10 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
             self.timer_star.timeout.connect(self.timer_star_callback)
             self.timer_star.setSingleShot(False)
 
+            self.timer_star_wgs84 = QTimer()
+            self.timer_star_wgs84.timeout.connect(self.timer_star_wgs84_callback)
+            self.timer_star_wgs84.setSingleShot(False)
+
             self.timer_bus = QTimer()
             self.timer_bus.timeout.connect(self.timer_bus_callback)
             self.timer_bus.setSingleShot(False)
@@ -77,6 +81,7 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
             self.checkBox_time.stateChanged.connect(self.checkbox_time_callback)
             self.checkBox_attitude.stateChanged.connect(self.checkbox_attitude_callback)
             self.checkBox_star.stateChanged.connect(self.checkbox_star_callback)
+            self.checkBox_star_wgs84.stateChanged.connect(self.checkbox_star_wgs84_callback)
             self.checkBox_bus_state.stateChanged.connect(self.checkbox_bus_callback)
 
         except Exception as e:
@@ -153,6 +158,14 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
         else:
             self.timer_star.stop()
 
+    def checkbox_star_wgs84_callback(self, state):
+        if state == Qt.Checked:
+            text = self.lineEdit_star_wgs84.text()
+            val = int(text)
+            self.timer_star_wgs84.start(val)
+        else:
+            self.timer_star_wgs84.stop()
+
     def checkbox_bus_callback(self, state):
         if state == Qt.Checked:
             text = self.lineEdit_bus_state.text()
@@ -200,6 +213,12 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
     def timer_star_callback(self):
         if self.is_opened:
             self.send_msg_for_star_test()
+        else:
+            print("can not open")
+
+    def timer_star_wgs84_callback(self):
+        if self.is_opened:
+            self.send_msg_for_star_wgs84_test()
         else:
             print("can not open")
 
@@ -379,6 +398,24 @@ class CanWindow(QDialog, can_ui.Ui_CanForm):
 
         frame = ycyk_can_frame()
         frame.name = "STAR"
+        frame.prio = 0x1
+        frame.src = 0x0
+        frame.grp = 0x01
+        frame.dst = 0x15
+        frame.func = 0x1
+        frame.data = data
+        self.can_send.send(frame)
+        self.can_send_b.send(frame)
+
+    def send_msg_for_star_wgs84_test(self):
+        data = [0x00, 0x23, 0x00, 0x04, 0x20, 0x1f, 0x1e, 0x1d,
+                0x1c, 0x1b, 0x1a, 0x19, 0x18, 0x17, 0x16, 0x15,
+                0x14, 0x13, 0x12, 0x11, 0x10, 0x0f, 0x0e, 0x0d,
+                0x0c, 0x0b, 0x0a, 0x09, 0x08, 0x07, 0x06, 0x05,
+                0x04, 0x03, 0x02, 0x01, 0x00, 0x11]
+
+        frame = ycyk_can_frame()
+        frame.name = "STAR_WGS84"
         frame.prio = 0x1
         frame.src = 0x0
         frame.grp = 0x01
