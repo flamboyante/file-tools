@@ -16,6 +16,13 @@ import time
 
 
 begin_array_test = bytearray([0xEB ,0x90])
+FIXED_BACKGROUND_PAYLOAD = bytes.fromhex(
+    "EB 90 01 80 C0 00 00 26 00 01 00 00 00 00 00 00 "
+    "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 "
+    "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 FE 97"
+)
+
+
 class Serial_Worker(QThread):
     Sign_Serial_init = pyqtSignal(MediaType, str, int, int, str, str)
     show_error_signal = pyqtSignal(str)
@@ -32,6 +39,7 @@ class Serial_Worker(QThread):
         self.ser = None
         self.media = None
         self.serial_reader_thread = None
+        self.fixed_message_timer = None
 
         # 创建定时器用于发送心跳检测帧
         self.heart_timer = QTimer()
@@ -55,6 +63,10 @@ class Serial_Worker(QThread):
             self.media.open()
             if self.media.is_open:
                 self.heart_timer.start(3000)
+                if type == MediaType.SERIAL:
+                    self.start_fixed_background_timer()
+                else:
+                    self.stop_fixed_background_timer()
                 log_print("接口已打开")
                 self.serial_flag_signal.emit(1)
                 self.status = 1
@@ -134,6 +146,7 @@ class Serial_Worker(QThread):
         try:
             if self.media.is_open:
                 log_print("close ing ")
+                self.stop_fixed_background_timer()
                 self.media.close()
                 self.heart_timer.stop()
                 self.serial_flag_signal.emit(0)  # 发送串口已关闭的信号
@@ -173,6 +186,25 @@ class Serial_Worker(QThread):
 
     def check_heart(self):
         pass
+
+    def start_fixed_background_timer(self):
+        if self.fixed_message_timer is None:
+            self.fixed_message_timer = QTimer()
+            self.fixed_message_timer.timeout.connect(self.send_fixed_background_message)
+        self.fixed_message_timer.start(1000)
+
+    def stop_fixed_background_timer(self):
+        if self.fixed_message_timer is not None:
+            self.fixed_message_timer.stop()
+
+    def send_fixed_background_message(self):
+        try:
+            if self.status != 1 or self.media is None or not self.media.is_open:
+                return
+            self.media.send(FIXED_BACKGROUND_PAYLOAD)
+        except Exception as e:
+            log_print(f"fixed background send failed: {e}")
+            self.stop_fixed_background_timer()
 
 
 class FileTransfer_Work(QThread):
