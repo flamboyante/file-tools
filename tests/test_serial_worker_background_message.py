@@ -25,6 +25,9 @@ class FakeQThread:
     def __init__(self, parent=None):
         self.parent = parent
 
+    def msleep(self, ms):
+        pass
+
 
 class FakeQTimer:
     def __init__(self, parent=None):
@@ -102,7 +105,12 @@ def install_stubs():
     sys.modules["Media.VlanMedia"] = vlan_mod
 
     ycyk_mod = types.ModuleType("ycyk_422")
-    ycyk_mod.Ycyk_422_Work = object
+
+    class FakeYcykWork:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    ycyk_mod.Ycyk_422_Work = FakeYcykWork
     sys.modules["ycyk_422"] = ycyk_mod
 
     logging_mod = types.ModuleType("logging_config")
@@ -120,6 +128,7 @@ def install_stubs():
 
 
 install_stubs()
+sys.modules.pop("Serial_thread", None)
 serial_thread = importlib.import_module("Serial_thread")
 
 
@@ -160,6 +169,71 @@ class SerialWorkerBackgroundMessageTests(unittest.TestCase):
         worker.send_fixed_background_message()
 
         self.assertEqual(worker.media.sent[-1], serial_thread.FIXED_BACKGROUND_PAYLOAD)
+
+
+class RecordingBatchWorker(serial_thread.BatchFileTransfer_Work):
+    def __init__(self, *args, fail_on=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fail_on = fail_on
+        self.calls = []
+        self.sleeps = []
+
+    def execute_transfer_task(self, task):
+        self.calls.append(task.file_path)
+        if task.file_path == self.fail_on:
+            raise RuntimeError("boom")
+
+    def msleep(self, ms):
+        self.sleeps.append(ms)
+
+
+class BatchFileTransferWorkTests(unittest.TestCase):
+    def make_task(self, file_path):
+        return types.SimpleNamespace(
+            file_path=file_path,
+            flash_value=0xFB,
+            mem_value=0x05,
+            status="pending",
+            error="",
+        )
+
+    def test_batch_worker_runs_tasks_in_order_with_interval(self):
+        statuses = []
+        worker = RecordingBatchWorker(
+            FakeSerialMedia(),
+            [self.make_task("a.bin"), self.make_task("b.bin")],
+            divide=True,
+            frame_len=1000,
+            frame_num=1024,
+            interval_ms=1000,
+        )
+        worker.task_status_signal.connect(lambda index, status, error: statuses.append((index, status, error)))
+
+        worker.run()
+
+        self.assertEqual(worker.calls, ["a.bin", "b.bin"])
+        self.assertEqual(worker.sleeps, [1000])
+        self.assertIn((0, "done", ""), statuses)
+        self.assertIn((1, "done", ""), statuses)
+
+    def test_batch_worker_stops_after_first_failure(self):
+        statuses = []
+        worker = RecordingBatchWorker(
+            FakeSerialMedia(),
+            [self.make_task("a.bin"), self.make_task("bad.bin"), self.make_task("c.bin")],
+            divide=True,
+            frame_len=1000,
+            frame_num=1024,
+            interval_ms=1000,
+            fail_on="bad.bin",
+        )
+        worker.task_status_signal.connect(lambda index, status, error: statuses.append((index, status, error)))
+
+        worker.run()
+
+        self.assertEqual(worker.calls, ["a.bin", "bad.bin"])
+        self.assertIn((1, "failed", "boom"), statuses)
+        self.assertIn((2, "skipped", ""), statuses)
 
 
 if __name__ == "__main__":

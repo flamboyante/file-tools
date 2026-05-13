@@ -12,6 +12,7 @@ from UIClass.BmuConsoleWindow import BmuConsoleWindow
 from UIClass.FTPWindow import FTPWindow
 from UIClass.ReadWindow import ReadWindow
 from UIClass.SerialSendWindow import SerialSendWindow
+from UIClass.BatchFlashDownWindow import BatchFlashDownWindow
 
 # from UIClass.TableViewWindow import TableView_MainWindow
 
@@ -625,6 +626,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.CommandBar.addActions([
             Action(FluentIcon.CONNECT, '控制台', triggered=self.show_bmu_console_window),
             Action(FluentIcon.DOWNLOAD, '版本重构', triggered=self.show_FlashDownWindow),
+            Action(FluentIcon.DOWNLOAD, '批量重构', triggered=self.show_BatchFlashDownWindow),
             Action(FluentIcon.ROBOT, '版本读取', triggered=self.show_FlashReadWindow),
             #Action(FluentIcon.POWER_BUTTON, '基带复位', triggered=self.IrRePOWER),
             Action(FluentIcon.SEARCH_MIRROR, '固件版本查询', triggered=self.IrVersionCheck),
@@ -709,6 +711,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.flashDownWindow.mainWindow = self  # 设置 FlashDownWindow 的父窗口引用
         self.flashDownWindow.setWindowModality(Qt.NonModal)
         self.flashDownWindow.show()
+
+    def show_BatchFlashDownWindow(self):
+        self.batchFlashDownWindow = BatchFlashDownWindow(self)
+        self.batchFlashDownWindow.mainWindow = self
+        self.batchFlashDownWindow.setWindowModality(Qt.NonModal)
+        self.batchFlashDownWindow.show()
 
     # 显示BMU控制台窗口
     def show_bmu_console_window(self):

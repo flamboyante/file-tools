@@ -273,6 +273,17 @@ class FileTransfer_Work(QThread):
 
         log_print("FileTransfer_Work is success!!!!!!!")
 
+    def execute_transfer_task(self, file_path, flash, mem, divide, frame_len, frame_num):
+        send_begin_divide = 0x03 if divide is True else 0x00
+        self.send_begin_frame(file_path, flash, mem, send_begin_divide, frame_len, frame_num)
+        log_print("send_begin_frame Validation Pass, divide: " + str(divide) + ", length: " + str(frame_len) + ", number: " + str(frame_num))
+        self.send_file(file_path)
+        log_print("send_file Validation Pass !")
+        self.send_finish_frame()
+        log_print("send_finish_frame Validation Pass !")
+        self.send_refactor_begin_frame(flash, mem)
+        log_print("send_refactor_begin_frame Validation Pass !")
+
     def validate_response1(self):
         # 定义期望读取的字节数
         expected_length = 13
@@ -494,3 +505,87 @@ class FileTransfer_Work(QThread):
         else:
             # 如果第11个字节既不是0x00也不是0xFF，抛出一个通用的异常
             raise ValueError("Invalid response: The 11th byte is neither 0x00 nor 0xFF.")"""
+
+
+class BatchFileTransfer_Work(FileTransfer_Work):
+    task_status_signal = pyqtSignal(int, str, str)
+    task_progress_signal = pyqtSignal(int, int)
+    batch_complete_signal = pyqtSignal()
+    batch_failed_signal = pyqtSignal(int, Exception, str)
+
+    def __init__(self, serial_worker, tasks, divide=True, frame_len=1000, frame_num=1024, interval_ms=1000, parent=None):
+        super(BatchFileTransfer_Work, self).__init__(serial_worker, parent)
+        self.tasks = list(tasks)
+        self.divide = divide
+        self.frame_len = frame_len
+        self.frame_num = frame_num
+        self.interval_ms = interval_ms
+        self.current_task_index = -1
+        self.stop_requested = False
+        self.file_processe_signal.connect(self._relay_task_progress)
+
+    def run(self):
+        failed = False
+        failure_info = None
+        for index, task in enumerate(self.tasks):
+            if self.stop_requested:
+                self._set_task_status(index, task, "skipped", "")
+                failed = True
+                if failure_info is None:
+                    error = RuntimeError("batch transfer stopped")
+                    failure_info = (index, error, "batch transfer stopped")
+                continue
+
+            if failed:
+                self._set_task_status(index, task, "skipped", "")
+                continue
+
+            self.current_task_index = index
+            self._set_task_status(index, task, "running", "")
+            try:
+                self.transferredSize = 0
+                self.execute_transfer_task(task)
+                self._set_task_status(index, task, "done", "")
+            except Exception as e:
+                failed = True
+                error = str(e)
+                self._set_task_status(index, task, "failed", error)
+                failure_info = (index, e, traceback.format_exc())
+                continue
+
+            if index < len(self.tasks) - 1 and self.interval_ms > 0:
+                self.msleep(int(self.interval_ms))
+
+        self.current_task_index = -1
+        if failure_info is not None:
+            self.batch_failed_signal.emit(*failure_info)
+        elif not failed:
+            self.batch_complete_signal.emit()
+
+    def execute_transfer_task(self, task):
+        super(BatchFileTransfer_Work, self).execute_transfer_task(
+            task.file_path,
+            task.flash_value,
+            task.mem_value,
+            self.divide,
+            self.frame_len,
+            self.frame_num,
+        )
+
+    def send_file_frame(self, f, segment, frame):
+        if self.stop_requested:
+            raise RuntimeError("batch transfer stopped")
+        return super(BatchFileTransfer_Work, self).send_file_frame(f, segment, frame)
+
+    def _set_task_status(self, index, task, status, error):
+        task.status = status
+        task.error = error
+        self.task_status_signal.emit(index, status, error)
+
+    def _relay_task_progress(self, progress):
+        if self.current_task_index >= 0:
+            self.task_progress_signal.emit(self.current_task_index, progress)
+
+    def request_stop(self):
+        self.stop_requested = True
+        self.send_resume()
