@@ -15,9 +15,10 @@ class Model_Excel_Task():
 
 
     def execl_open(self):
-        #localFilePath = os.path.join(os.getcwd(), '.\\Can_Frame_Deal\\Can.xlsx')
-        #print(localFilePath)
-        self.wb = load_workbook('.\\dist\\Can_Frame_Deal\\Can.xlsx')
+        local_file_path = os.path.join(os.getcwd(), 'Can_Frame_Deal', 'Can.xlsx')
+        packaged_file_path = os.path.join(os.getcwd(), 'dist', 'Can_Frame_Deal', 'Can.xlsx')
+        file_path = packaged_file_path if os.path.exists(packaged_file_path) else local_file_path
+        self.wb = load_workbook(file_path)
         self.wbsheet_names = self.wb.sheetnames
 
 

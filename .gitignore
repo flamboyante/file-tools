@@ -1,67 +1,64 @@
-### Python ###
-# 编译文件和缓存
+# Python bytecode and caches
 __pycache__/
 *.py[cod]
-*.so
-*.egg-info/
-*.egg
+*.pyo
 .pytest_cache/
+*.egg-info/
 
-# 虚拟环境和包目录
+# Virtual environments
+.venv/
 venv/
 env/
-pip-selfcheck.json
 
-# 构建和分发目录
+# Build and packaging output
 build/
 dist/
 *.exe
+*.pkg
+*.msi
+*.rar
+*.zip
 
+# Logs and runtime output
+*.log
+logs/
+debug_*.log
+app.log
 
-### PyQt5 相关 ###
-# 忽略由 `pyuic5` 生成的UI代码（若需保留生成的 *_ui.py，请注释下一行）
-#*_ui.py
-
-# 忽略Qt Designer的临时文件（保留原始的 .ui 文件）
-*.ui~
-*.autosave
-
-# 忽略资源文件编译结果（.qrc生成的_rc.py）
-#*_rc.py
-
-
-### IDE和编辑器 ###
-# PyCharm
+# Local IDE/editor files
 .idea/
-*.iml
-
-# VS Code
 .vscode/
+*.iml
 *.code-workspace
-
-# Sublime Text
 *.sublime-project
 *.sublime-workspace
 
-
-### 系统文件 ###
+# OS files
 .DS_Store
 Thumbs.db
 
-
-### 日志和数据库 ###
-*.log
-*.sqlite
-*.db
-
-
-### 本地环境文件 ###
+# Local environment files
 .env
-.env.local
+.env.*
+pip-selfcheck.json
 
-###
-*.qrc
-*.xlsx
+# Qt Designer temporary files
+*.ui~
+*.autosave
+photo/1111.qrc
+photo/t1.qrc
 
-
+# Firmware/readback/test binary output
 *.bin
+readflash*.bin
+
+# Local spreadsheets and exported reports
+*.xlsx
+*.xls
+*.xlsm
+!Can_Frame_Deal/Can.xlsx
+
+# Local databases
+*.sqlite
+*.sqlite3
+*.db

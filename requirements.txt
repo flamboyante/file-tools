@@ -1,0 +1,8 @@
+PyQt5
+PyQt-Fluent-Widgets
+pyserial
+openpyxl
+scapy
+
+# The HkjView/Pyqt5_UI modules import `siui`.
+# If you use those screens, install the matching siui package/source used by the project.
