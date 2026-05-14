@@ -46,6 +46,7 @@ class Serial_Worker(QThread):
         self.media = None
         self.serial_reader_thread = None
         self.fixed_message_timer = None
+        self.fixed_message_enabled = False
 
         # 创建定时器用于发送心跳检测帧
         self.heart_timer = QTimer()
@@ -69,7 +70,7 @@ class Serial_Worker(QThread):
             self.media.open()
             if self.media.is_open:
                 self.heart_timer.start(3000)
-                if type == MediaType.SERIAL:
+                if type == MediaType.SERIAL and self.fixed_message_enabled:
                     self.start_fixed_background_timer()
                 else:
                     self.stop_fixed_background_timer()
@@ -202,6 +203,15 @@ class Serial_Worker(QThread):
     def stop_fixed_background_timer(self):
         if self.fixed_message_timer is not None:
             self.fixed_message_timer.stop()
+
+    def set_fixed_background_enabled(self, enabled):
+        self.fixed_message_enabled = bool(enabled)
+        if not self.fixed_message_enabled:
+            self.stop_fixed_background_timer()
+            return
+
+        if self.status == 1 and self.media is not None and self.media.is_open:
+            self.start_fixed_background_timer()
 
     def send_fixed_background_message(self):
         try:
@@ -458,8 +468,8 @@ class FileTransfer_Work(QThread):
             while self.running is False:
                 self.msleep(1)
 
-            len = self.send_file_frame(f, seg, i)
-            if len == 0:
+            payload_len = self.send_file_frame(f, seg, i)
+            if payload_len == 0:
                 break
 
             try:
@@ -468,10 +478,10 @@ class FileTransfer_Work(QThread):
                 log_print('send_file error:', e)
                 raise
             # self.Ycyk_422_Worker.file_count += 1
-            self.transferredSize += len
+            self.transferredSize += payload_len
             # time.sleep(0.1)
             self.file_processe_signal.emit(self.transferredSize)
-            log_print("send_file_frame_byte transfer times is ", i, "/", self.Ycyk_422_Worker.frames - 1, f', len: {len}')
+            log_print("send_file_frame_byte transfer times is ", i, "/", self.Ycyk_422_Worker.frames - 1, f', len: {payload_len}')
         # self.file_processe_signal.emit(self.transferredSize)
 
     # 发送一帧数据
@@ -504,7 +514,12 @@ class FileTransfer_Work(QThread):
             log_print(first_20_hex)
             self.file_log_signal.emit(f'20 bytes of first frame: {first_20_hex}')
 
-        return self.serial_worker.media.send(send_file_frame_byte)
+        bytes_sent = self.serial_worker.media.send(send_file_frame_byte)
+        if bytes_sent != len(send_file_frame_byte):
+            raise IOError(
+                f"send_file_frame incomplete send, bytes_sent: {bytes_sent}, expected: {len(send_file_frame_byte)}"
+            )
+        return len(file_data)
 
     def send_finish_frame(self):
         try:

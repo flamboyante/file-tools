@@ -3,6 +3,7 @@ import sys
 import types
 import importlib
 import unittest
+import io
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
@@ -150,18 +151,27 @@ class SerialWorkerBackgroundMessageTests(unittest.TestCase):
 
         self.assertEqual(serial_thread.FIXED_BACKGROUND_PAYLOAD, expected)
 
-    def test_opening_serial_starts_background_timer(self):
+    def test_opening_serial_does_not_start_background_timer_by_default(self):
         worker = serial_thread.Serial_Worker()
 
         worker.init_media(FakeMediaType.SERIAL, "COM1", 115200, 8, "1", "NONE")
 
         self.assertEqual(worker.status, 1)
+        self.assertIsNone(worker.fixed_message_timer)
+
+    def test_enabling_background_message_starts_background_timer(self):
+        worker = serial_thread.Serial_Worker()
+
+        worker.init_media(FakeMediaType.SERIAL, "COM1", 115200, 8, "1", "NONE")
+        worker.set_fixed_background_enabled(True)
+
         self.assertIsNotNone(worker.fixed_message_timer)
         self.assertEqual(worker.fixed_message_timer.started_with, 3000)
 
     def test_closing_serial_stops_background_timer(self):
         worker = serial_thread.Serial_Worker()
         worker.init_media(FakeMediaType.SERIAL, "COM1", 115200, 8, "1", "NONE")
+        worker.set_fixed_background_enabled(True)
 
         worker.close_serial()
 
@@ -262,6 +272,37 @@ class BatchFileTransferWorkTests(unittest.TestCase):
 
         self.assertEqual(response[9], 0x8A)
         self.assertEqual(media.recv_calls, 2)
+
+    def test_send_file_frame_returns_payload_length_after_full_send(self):
+        media = FakeSerialMedia()
+        media.send = lambda data: len(data)
+        worker = serial_thread.FileTransfer_Work(types.SimpleNamespace(media=media))
+        worker.Ycyk_422_Worker = types.SimpleNamespace(
+            frame_size=4,
+            frames=2,
+            segments=1,
+            segments_end_frames=2,
+            send_datas=lambda apid, seg, group_flag, file_data: b"HEAD" + file_data,
+        )
+
+        payload_len = worker.send_file_frame(io.BytesIO(b"ABCD"), 0, 0)
+
+        self.assertEqual(payload_len, 4)
+
+    def test_send_file_frame_raises_when_media_send_is_incomplete(self):
+        media = FakeSerialMedia()
+        media.send = lambda data: 0
+        worker = serial_thread.FileTransfer_Work(types.SimpleNamespace(media=media))
+        worker.Ycyk_422_Worker = types.SimpleNamespace(
+            frame_size=4,
+            frames=2,
+            segments=1,
+            segments_end_frames=2,
+            send_datas=lambda apid, seg, group_flag, file_data: b"HEAD" + file_data,
+        )
+
+        with self.assertRaises(OSError):
+            worker.send_file_frame(io.BytesIO(b"ABCD"), 0, 0)
 
 
 if __name__ == "__main__":
