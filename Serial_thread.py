@@ -21,6 +21,12 @@ FIXED_BACKGROUND_PAYLOAD = bytes.fromhex(
     "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 "
     "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 FE 97"
 )
+RESPONSE_LABELS = {
+    0x5A: "文件传输开始应答",
+    0x8A: "文件传输应答",
+    0xBB: "文件传输结束应答",
+    0xCA: "重构结果查询应答",
+}
 
 
 class Serial_Worker(QThread):
@@ -191,7 +197,7 @@ class Serial_Worker(QThread):
         if self.fixed_message_timer is None:
             self.fixed_message_timer = QTimer()
             self.fixed_message_timer.timeout.connect(self.send_fixed_background_message)
-        self.fixed_message_timer.start(1000)
+        self.fixed_message_timer.start(3000)
 
     def stop_fixed_background_timer(self):
         if self.fixed_message_timer is not None:
@@ -334,6 +340,54 @@ class FileTransfer_Work(QThread):
             # 如果第11个字节既不是0x00也不是0xFF，抛出一个通用的异常
             raise ValueError("Invalid response: The 11th byte is neither 0x00 nor 0xFF.")
 
+    def wait_expected_response(self, expected_type, max_attempts=50):
+        for _ in range(max_attempts):
+            try:
+                response = self.serial_worker.media.recv(self.LengthRecv)
+            except Exception as e:
+                log_print("wait_expected_response is ", e)
+                raise
+
+            if len(response) < 11:
+                raise ValueError(f"Invalid response length: {len(response)}")
+
+            self.Ycyk_422_Worker.binary_print_hex(response)
+            response_hex = response.hex(' ')
+            self.file_log_signal.emit(f'response: {response_hex}')
+            log_print('response:', response_hex)
+
+            type_code = response[9]
+            expected_label = RESPONSE_LABELS.get(expected_type, hex(expected_type))
+            current_label = RESPONSE_LABELS.get(type_code, hex(type_code))
+            if type_code != expected_type:
+                log_print(f"skip unrelated response: expected {expected_label}, got {current_label}", response)
+                self.file_log_signal.emit(
+                    f'skip unrelated response: expected {expected_label}, got {current_label}, raw: {response_hex}'
+                )
+                continue
+
+            log_print(current_label, response)
+
+            if response[10] == 0x00:
+                log_print("鏍￠獙閫氳繃,", response[10], "鍙傛暟姝ｅ父")
+                return response
+            if response[10] == 0xFF:
+                if type_code == 0x5A:
+                    raise ValueError("鏂囦欢浼犺緭寮€濮?- 寮傚父锛屼笉鑳藉紑濮嬫枃浠堕噸鏋?")
+                if type_code == 0xBB:
+                    raise ValueError("鏂囦欢浼犺緭缁撴潫搴旂瓟 - 閲嶆瀯寮傚父.")
+                if type_code == 0x8A:
+                    raise ValueError("鏂囦欢浼犺緭搴旂瓟 - 鎺ユ敹寮傚父")
+                if type_code == 0xCA:
+                    raise ValueError("閲嶆瀯缁撴灉鏌ヨ搴旂瓟 - 閲嶆瀯缁撴灉寮傚父")
+                raise ValueError("An unknown error with code 0xFF occurred.")
+            if response[10] == 0x11:
+                raise ValueError("鏂囦欢浼犺緭缁撴潫搴旂瓟 - CRC閲嶆瀯寮傚父.")
+            raise ValueError("Invalid response: The 11th byte is neither 0x00 nor 0xFF.")
+
+        expected_label = RESPONSE_LABELS.get(expected_type, hex(expected_type))
+        raise TimeoutError(f"Did not receive expected response: {expected_label}")
+
     def send_get_refactor_result_frame(self):
         try:
             get_refactor_result_frame_bytes = self.Ycyk_422_Worker.get_refactor_result()
@@ -343,7 +397,7 @@ class FileTransfer_Work(QThread):
             log_print(get_refactor_result_frame_hex)
             log_print("send_get_refactor_result_frame transfer completed.")
             time.sleep(0.1)
-            self.validate_response1()
+            self.wait_expected_response(0xCA)
         except Exception as e:
             log_print('send_get_refactor_result_frame:', e)
 
@@ -369,7 +423,7 @@ class FileTransfer_Work(QThread):
             self.file_log_signal.emit(f'send begin frame: {send_begin_frame_hex}')
             log_print(send_begin_frame_hex)
             log_print("send_begin_frame transfer completed.")
-            self.validate_response1()
+            self.wait_expected_response(0x5A)
             time.sleep(1)
         except Exception as e:
             log_print('send_begin_frame:', e)
@@ -409,7 +463,7 @@ class FileTransfer_Work(QThread):
                 break
 
             try:
-                self.validate_response1()
+                self.wait_expected_response(0x8A)
             except Exception as e:
                 log_print('send_file error:', e)
                 raise
@@ -461,7 +515,7 @@ class FileTransfer_Work(QThread):
             self.file_log_signal.emit(f'send begin frame: {send_finish_frame_hex}')
             log_print('send_finish_frame:', send_finish_frame_hex)
 
-            self.validate_response1()
+            self.wait_expected_response(0xBB)
 
             # self.serial_worker.change_baud_rate(115200)
             log_print("transfer completed!!!!!!!!!!!!!!!!!!!!!!!!")

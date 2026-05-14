@@ -55,6 +55,8 @@ class FakeSerialMedia:
         self.is_open = False
         self.sent = []
         self.close_called = False
+        self.recv_queue = []
+        self.recv_calls = 0
 
     def open(self):
         self.is_open = True
@@ -66,6 +68,12 @@ class FakeSerialMedia:
     def send(self, data):
         self.sent.append(data)
         return len(data)
+
+    def recv(self, length):
+        self.recv_calls += 1
+        if not self.recv_queue:
+            raise RuntimeError("no queued response")
+        return self.recv_queue.pop(0)
 
 
 class FakeEthernetMedia(FakeSerialMedia):
@@ -149,7 +157,7 @@ class SerialWorkerBackgroundMessageTests(unittest.TestCase):
 
         self.assertEqual(worker.status, 1)
         self.assertIsNotNone(worker.fixed_message_timer)
-        self.assertEqual(worker.fixed_message_timer.started_with, 1000)
+        self.assertEqual(worker.fixed_message_timer.started_with, 3000)
 
     def test_closing_serial_stops_background_timer(self):
         worker = serial_thread.Serial_Worker()
@@ -188,6 +196,12 @@ class RecordingBatchWorker(serial_thread.BatchFileTransfer_Work):
 
 
 class BatchFileTransferWorkTests(unittest.TestCase):
+    def make_response(self, type_code, status=0x00):
+        response = bytearray(13)
+        response[9] = type_code
+        response[10] = status
+        return bytes(response)
+
     def make_task(self, file_path):
         return types.SimpleNamespace(
             file_path=file_path,
@@ -234,6 +248,20 @@ class BatchFileTransferWorkTests(unittest.TestCase):
         self.assertEqual(worker.calls, ["a.bin", "bad.bin"])
         self.assertIn((1, "failed", "boom"), statuses)
         self.assertIn((2, "skipped", ""), statuses)
+
+    def test_wait_expected_response_skips_unrelated_ack(self):
+        media = FakeSerialMedia()
+        media.recv_queue = [
+            self.make_response(0xCA),
+            self.make_response(0x8A),
+        ]
+        worker = serial_thread.FileTransfer_Work(types.SimpleNamespace(media=media))
+        worker.Ycyk_422_Worker = types.SimpleNamespace(binary_print_hex=lambda response: None)
+
+        response = worker.wait_expected_response(0x8A)
+
+        self.assertEqual(response[9], 0x8A)
+        self.assertEqual(media.recv_calls, 2)
 
 
 if __name__ == "__main__":
