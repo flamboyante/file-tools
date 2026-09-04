@@ -13,6 +13,7 @@ from UIClass.FTPWindow import FTPWindow
 from UIClass.ReadWindow import ReadWindow
 from UIClass.SerialSendWindow import SerialSendWindow
 from UIClass.BatchFlashDownWindow import BatchFlashDownWindow
+from UIClass.NewCanWindow import NewCanWindow
 
 # from UIClass.TableViewWindow import TableView_MainWindow
 
@@ -635,6 +636,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             Action(FluentIcon.MAIL, 'TableView',triggered = self.Table_Window_Show ),
             Action(FluentIcon.POWER_BUTTON, 'Can', triggered=self.Can_Window_Show),
             Action(FluentIcon.CONNECT, 'SerialSend', triggered=self.Serial_Send_Window_Show),
+            Action(FluentIcon.SEND, 'Can 新版', triggered=self.Can_New_Window_Show),
         ])
 
         # 添加始终隐藏的动作
@@ -690,6 +692,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.can_window = CanWindow()
         self.can_window.setWindowModality(Qt.NonModal)
         self.can_window.show()
+
+    def Can_New_Window_Show(self):
+        self.can_window_new = NewCanWindow()
+        self.can_window_new.setWindowModality(Qt.NonModal)
+        self.can_window_new.show()
 
     def Serial_Send_Window_Show(self):
         self.serial_send_window = SerialSendWindow()

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>新CAN工具 · 布局方案甲：A/B 分屏</title>
+<style>
+  :root{
+    --bg:#f4f6fb; --panel:#ffffff; --panel2:#fafbfe; --line:#e3e7f0;
+    --text:#1f2430; --muted:#6b7280; --accent:#2f6fed; --accent-soft:#e8f0ff;
+    --green:#0f9d58; --green-soft:#e7f6ee; --red:#e5484d; --red-soft:#fdecec;
+    --orange:#f29900; --orange-soft:#fdf3e0; --gray-soft:#f0f1f5;
+    --btn:#ffffff; --btnline:#d0d6e2;
+  }
+  .dark{
+    --bg:#0e1116; --panel:#171b22; --panel2:#1c2129; --line:#2a313c;
+    --text:#e7ebf2; --muted:#98a1b0; --accent:#4c8dff; --accent-soft:#1d2c4a;
+    --green:#34c471; --green-soft:#12301f; --red:#f2555a; --red-soft:#3a1d1f;
+    --orange:#f7b73c; --orange-soft:#36290f; --gray-soft:#232830;
+    --btn:#20252d; --btnline:#3a4350;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif; background:var(--bg); color:var(--text); font-size:13px; line-height:1.45; padding:16px}
+  .mock-banner{background:var(--accent-soft); border:1px solid var(--accent); color:var(--accent); padding:8px 14px; border-radius:8px; margin-bottom:14px; font-size:12px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap}
+  .mock-banner b{color:var(--text)}
+  .mock-banner .hint{color:var(--muted)}
+  .topbar{display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap}
+  .title{font-size:16px; font-weight:600}
+  .spacer{flex:1}
+  .pill{font-size:11px; padding:2px 10px; border-radius:99px; background:var(--gray-soft); color:var(--muted); border:1px solid var(--btnline)}
+  .pill.on{background:var(--green-soft); color:var(--green); border-color:var(--green)}
+  .pill.warn{background:var(--orange-soft); color:var(--orange); border-color:var(--orange)}
+  .btn{border:1px solid var(--btnline); background:var(--btn); color:var(--text); border-radius:6px; padding:5px 12px; font-size:12px; cursor:pointer; white-space:nowrap; transition:all .12s}
+  .btn:hover{border-color:var(--accent); color:var(--accent)}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+  .btn.primary:hover{filter:brightness(1.1); color:#fff}
+  .btn.danger{color:var(--red); border-color:var(--red)}
+  .btn.sm{padding:2px 8px; font-size:11px}
+  .row{display:flex; gap:12px; align-items:flex-start}
+  .colA,.colB{flex:1 1 0; min-width:0}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; display:flex; flex-direction:column}
+  .panel-head{display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--line); background:var(--panel2); flex-wrap:wrap}
+  .panel-head .t{font-weight:600; font-size:13px}
+  .ch-badge{width:22px;height:22px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:12px}
+  .ch-badge.a{background:#2f6fed}
+  .ch-badge.b{background:#9b5cff}
+  .eq-bar{display:flex; gap:6px; align-items:center; font-size:12px; color:var(--muted); flex-wrap:wrap}
+  .eq-bar .grp{display:flex; align-items:center; gap:4px; background:var(--gray-soft); border:1px solid var(--btnline); border-radius:6px; padding:2px 6px}
+  .eq-bar input[type=checkbox]{accent-color:var(--accent)}
+  .switch{position:relative; width:30px; height:16px; background:var(--btnline); border-radius:99px; display:inline-block; vertical-align:middle}
+  .switch:after{content:""; position:absolute; width:12px;height:12px;background:#fff;border-radius:50%;top:2px;left:2px;transition:.15s}
+  .switch.on{background:var(--green)}
+  .switch.on:after{left:16px}
+  .toolbar{display:flex; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap; align-items:center; background:var(--panel2)}
+  .toolbar .sep{width:1px;height:18px;background:var(--line); margin:0 2px}
+  .hint{color:var(--muted); font-size:11px}
+  .tbl-wrap{overflow:auto}
+  table{width:100%; border-collapse:collapse; font-size:12px}
+  thead th{position:sticky; top:0; background:var(--panel2); z-index:2; text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); color:var(--muted); font-weight:600; white-space:nowrap}
+  tbody td{padding:6px 10px; border-bottom:1px solid var(--line); vertical-align:middle}
+  tbody tr:hover{background:var(--accent-soft)}
+  tbody tr.running-row{background:color-mix(in srgb, var(--accent-soft) 55%, transparent)}
+  .rowname{font-weight:600}
+  .tag{display:inline-block; font-size:10px; padding:1px 6px; border-radius:99px; background:var(--gray-soft); color:var(--muted); margin-right:4px}
+  .tag.frames{background:var(--accent-soft); color:var(--accent)}
+  .tag.interval{background:var(--orange-soft); color:var(--orange)}
+  .frame-detail{display:none; background:var(--gray-soft)}
+  .frame-detail td{padding:4px 12px 4px 34px; font-family:Consolas,monospace; font-size:11px; color:var(--muted)}
+  .frame-detail .seq{color:var(--muted); margin-right:8px}
+  tr.open + .frame-detail{display:table-row}
+  .badge{font-size:10px; padding:1px 7px; border-radius:99px; white-space:nowrap}
+  .badge.ok{background:var(--green-soft); color:var(--green)}
+  .badge.err{background:var(--red-soft); color:var(--red)}
+  .badge.pend{background:var(--orange-soft); color:var(--orange)}
+  .badge.gray{background:var(--gray-soft); color:var(--muted)}
+  .monitor{flex:1; overflow:auto; font-family:Consolas,"Courier New",monospace; font-size:11.5px; min-height:220px; max-height:420px; padding:6px 0}
+  .mline{display:flex; gap:6px; align-items:baseline; padding:2px 12px; white-space:nowrap}
+  .mline:hover{background:var(--gray-soft)}
+  .m-time{color:var(--muted); flex-shrink:0}
+  .m-chan{font-weight:700; width:14px; flex-shrink:0}
+  .m-chan.a{color:var(--accent)}
+  .m-chan.b{color:#9b5cff}
+  .m-dir{width:26px; text-align:center; flex-shrink:0; font-weight:700}
+  .m-dir.tx{color:var(--orange)}
+  .m-dir.rx{color:var(--green)}
+  .m-dir.err{color:var(--red)}
+  .m-line-tx{color:var(--text)}
+  .m-line-rx{color:var(--green)}
+  .m-line-err{color:var(--red); background:var(--red-soft)}
+  .m-ok{color:var(--green)}
+  .m-st{flex-shrink:0}
+  .m-data{color:var(--muted)}
+  .bottombar{display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap}
+  .stat{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:5px 14px; font-size:12px; display:flex; gap:14px; flex-wrap:wrap}
+  .stat b{font-weight:600}
+  .stat .g{color:var(--green)} .stat .r{color:var(--red)} .stat .o{color:var(--orange)}
+  .legend{display:flex; gap:10px; flex-wrap:wrap; font-size:11px; color:var(--muted); align-items:center}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:3px}
+  .legend .li{display:inline-flex; align-items:center}
+  .dot-tx{background:var(--orange)} .dot-rx{background:var(--green)} .dot-err{background:var(--red)} .dot-pend{background:var(--gray-soft)}
+  .footer-note{margin-top:14px; font-size:11px; color:var(--muted); border-top:1px dashed var(--line); padding-top:8px}
+  kbd{background:var(--gray-soft); border:1px solid var(--btnline); border-radius:4px; padding:0 5px; font-size:11px; font-family:Consolas,monospace}
+  .inputable{position:relative; border-bottom:1px dashed var(--accent); cursor:text}
+  .inputable:hover{background:var(--accent-soft)}
+  .inputable:after{content:"✎"; position:absolute; right:2px; top:-1px; font-size:9px; color:var(--accent)}
+  .pickable{border:1px dashed transparent; cursor:pointer; border-radius:4px}
+  .pickable:hover{border-color:var(--accent); background:var(--accent-soft)}
+</style>
+</head>
+<body class="light">
+<div class="mock-banner">
+  <span><b>布局方案甲 · A/B 分屏</b> —— 左右各一独立配置区 + 各带监视流。以下为静态界面示意（无真实功能）。</span>
+  <span class="hint">交互提示：<span class="pickable" style="border-color:var(--accent)">虚线可点选/切换</span> · <span class="inputable">虚线下划线=可输入</span> · 灰色=运行时只读</span>
+</div>
+
+<div class="topbar">
+  <span class="title">CAN 多指令定时发送 · v3 mockup</span>
+  <span class="pill">设备: USBCAN 500K</span>
+  <span class="pill on">● 已连接</span>
+  <span class="pill warn">运行中</span>
+  <span class="spacer"></span>
+  <label class="eq-bar grp"><input type="checkbox"> 深色模式</label>
+</div>
+
+<div class="row">
+  <!-- ============ 方案甲：左 A ============ -->
+  <div class="colA">
+    <div class="panel">
+      <div class="panel-head">
+        <span class="ch-badge a">A</span>
+        <span class="t">通道 A 配置表</span>
+        <span class="eq-bar">
+          <span class="grp"><label style="cursor:pointer"><span class="switch"></span> 全部启动</label></span>
+          <span class="grp">预设 <span class="pickable inputable">▼ STAR_WGS84</span></span>
+        </span>
+        <span class="spacer"></span>
+        <button class="btn sm">＋ 添加指令</button>
+        <button class="btn sm">复制</button>
+        <button class="btn sm">删除</button>
+      </div>
+      <div class="toolbar">
+        <button class="btn sm primary">▶ 开始发送</button>
+        <button class="btn sm">⏹ 停止</button>
+        <span class="sep"></span>
+        <button class="btn sm">↑ 上移</button>
+        <button class="btn sm">↓ 下移</button>
+        <span class="sep"></span>
+        <button class="btn sm">导入 JSON</button>
+        <button class="btn sm">导入 Excel</button>
+        <button class="btn sm">导出配置</button>
+        <span class="hint">运行期间：配置表只读</span>
+        <span class="spacer"></span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th style="width:30px"><input type="checkbox" checked></th><th>指令名称</th><th>帧</th><th>间隔</th><th>状态</th><th>最近结果</th><th style="width:120px">操作</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><input type="checkbox" checked></td>
+              <td><span class="rowname inputable">星敏感器测试帧</span></td>
+              <td><span class="tag frames">5帧</span></td>
+              <td><span class="tag interval inputable">100 ms</span></td>
+              <td><span class="badge ok">启用</span></td>
+              <td><span class="badge pend">待应答</span></td>
+              <td><span class="pickable" style="color:var(--accent)">展开 ▾</span> <span class="pickable" style="color:var(--red)">✕</span></td>
+            </tr>
+            <tr class="frame-detail open">
+              <td colspan="7">
+                <div><span class="seq">#1</span><b>ID</b> 0x1E180015 &nbsp;<b>数据</b> 00 23 00 01 20 1F 1E 1D <span class="badge ok">OK</span></div>
+                <div><span class="seq">#2</span><b>ID</b> 0x1F380015 &nbsp;<b>数据</b> 1C 1B 1A 19 18 17 16 15 <span class="badge ok">OK</span></div>
+                <div><span class="seq">#3</span><b>ID</b> 0x1E380015 &nbsp;<b>数据</b> 14 13 12 11 10 0F 0E 0D <span class="badge pend">…</span></div>
+                <div><span class="seq">#4</span><b>ID</b> 0x1F380015 &nbsp;<b>数据</b> 0C 0B 0A 09 08 07 06 05</div>
+                <div><span class="seq">#5</span><b>ID</b> 0x1E380015 &nbsp;<b>数据</b> 04 03 02 01 00 11</div>
+              </td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td><span class="rowname inputable">姿态指令</span></td>
+              <td><span class="tag frames">5帧</span></td>
+              <td><span class="tag interval inputable">500 ms</span></td>
+              <td><span class="badge gray">停止</span></td>
+              <td><span class="badge ok">成功 12:01:05.332</span></td>
+              <td><span class="pickable" style="color:var(--accent)">展开 ▸</span> <span class="pickable" style="color:var(--red)">✕</span></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td><span class="rowname inputable">时间同步帧</span></td>
+              <td><span class="tag frames">1帧</span></td>
+              <td><span class="tag interval inputable">1000 ms</span></td>
+              <td><span class="badge ok">启用</span></td>
+              <td><span class="badge err">错误 TX超时</span></td>
+              <td><span class="pickable" style="color:var(--accent)">展开 ▸</span> <span class="pickable" style="color:var(--red)">✕</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-head" style="border-top:1px solid var(--line); border-bottom:none; padding:6px 12px">
+        <span class="t">监视流 · 通道 A</span>
+        <span class="hint">TX=橙 / RX=绿 / ERR=红 每帧一行</span>
+        <span class="spacer"></span>
+        <button class="btn sm">暂停</button>
+        <button class="btn sm">清空</button>
+        <button class="btn sm">导出 TX/RX 记录</button>
+      </div>
+      <div class="monitor" id="monA">
+        <div class="mline"><span class="m-time">12:01:05.332</span><span class="m-chan a">A</span><span class="m-dir rx">RX</span><span class="m-st"><span class="badge ok">OK</span></span><span class="m-line-rx">0x1E180015</span><span class="m-data">00 23 00 01 20 1F 1E 1D</span></div>
+        <div class="mline"><span class="m-time">12:01:05.331</span><span class="m-chan a">A</span><span class="m-dir tx">TX</span><span class="m-st"><span class="badge pend">帧5/5</span></span><span class="m-line-tx">0x1E380015</span><span class="m-data">04 03 02 01 00 11</span></div>
+        <div class="mline"><span class="m-time">12:01:05.331</span><span class="m-chan a">A</span><span class="m-dir tx">TX</span><span class="m-st"><span class="badge pend">帧4/5</span></span><span class="m-line-tx">0x1F380015</span><span class="m-data">0C 0B 0A 09 08 07 06 05</span></div>
+        <div class="mline"><span class="m-time">12:01:05.330</span><span class="m-chan a">A</span><span class="m-dir tx">TX</span><span class="m-st"><span class="badge pend">帧3/5</span></span><span class="m-line-tx">0x1E380015</span><span class="m-data">14 13 12 11 10 0F 0E 0D</span></div>
+        <div class="mline"><span class="m-time">12:01:05.330</span><span class="m-chan a">A</span><span class="m-dir tx">TX</span><span class="m-st"><span class="badge pend">帧2/5</span></span><span class="m-line-tx">0x1F380015</span><span class="m-data">1C 1B 1A 19 18 17 16 15</span></div>
+        <div class="mline"><span class="m-time">12:01:05.330</span><span class="m-chan a">A</span><span class="m-dir tx">TX</span><span class="m-st"><span class="badge ok">OK</span></span><span class="m-line-tx">0x1E180015</span><span class="m-data">00 23 00 01 20 1F 1E 1D</span></div>
+        <div class="mline"><span class="m-time">12:01:05.210</span><span class="m-chan a">A</span><span class="m-dir err">ERR</span><span class="m-st"><span class="badge err">TX失败:总线错误</span></span><span class="m-line-err">0x00000A00</span><span class="m-data">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 方案甲：右 B ============ -->
+  <div class="colB">
+    <div class="panel">
+      <div class="panel-head">
+        <span class="ch-badge b">B</span>
+        <span class="t">通道 B 配置表</span>
+        <span class="eq-bar">
+          <span class="grp"><label style="cursor:pointer"><span class="switch"></span> 全部启动</label></span>
+          <span class="grp">预设 <span class="pickable inputable">▼ 姿态指令</span></span>
+        </span>
+        <span class="spacer"></span>
+        <button class="btn sm">＋ 添加指令</button>
+        <button class="btn sm">复制</button>
+        <button class="btn sm">删除</button>
+      </div>
+      <div class="toolbar">
+        <button class="btn sm primary">▶ 开始发送</button>
+        <button class="btn sm">⏹ 停止</button>
+        <span class="sep"></span>
+        <button class="btn sm">↑ 上移</button>
+        <button class="btn sm">↓ 下移</button>
+        <span class="sep"></span>
+        <button class="btn sm">导入 JSON</button>
+        <button class="btn sm">导入 Excel</button>
+        <button class="btn sm">导出配置</button>
+        <span class="hint">运行期间：配置表只读</span>
+        <span class="spacer"></span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th style="width:30px"><input type="checkbox" checked></th><th>指令名称</th><th>帧</th><th>间隔</th><th>状态</th><th>最近结果</th><th style="width:120px">操作</th></tr></thead>
+          <tbody>
+            <tr class="running-row">
+              <td><input type="checkbox" checked></td>
+              <td><span class="rowname">姿态 40B 请求</span></td>
+              <td><span class="tag frames">5帧</span></td>
+              <td><span class="tag interval">200 ms</span></td>
+              <td><span class="badge ok">启用</span></td>
+              <td><span class="badge ok">成功 12:01:05.102</span></td>
+              <td><span class="pickable" style="color:var(--accent)">展开 ▾</span> <span class="pickable" style="color:var(--red)">✕</span></td>
+            </tr>
+            <tr class="frame-detail open">
+              <td colspan="7">
+                <div><span class="seq">#1</span><b>ID</b> 0x1E18003F &nbsp;<b>数据</b> 00 25 00 02 00 01 02 03 <span class="badge ok">OK</span></div>
+                <div><span class="seq">#2</span><b>ID</b> 0x1F38003F &nbsp;<b>数据</b> 04 05 06 07 08 09 0A 0B</div>
+                <div><span class="seq">#3</span><b>ID</b> 0x1E38003F &nbsp;<b>数据</b> 0C 0D 0E 0F 10 11 12 13</div>
+                <div><span class="seq">#4</span><b>ID</b> 0x1F38003F &nbsp;<b>数据</b> 14 15 16 17 18 19 1A 1B</div>
+                <div><span class="seq">#5</span><b>ID</b> 0x1E38003F &nbsp;<b>数据</b> 1C 1D 1E 1F 20 21 22 55</div>
+              </td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td><span class="rowname inputable">慢遥 SLOW1</span></td>
+              <td><span class="tag frames">1帧</span></td>
+              <td><span class="tag interval inputable">500 ms</span></td>
+              <td><span class="badge gray">停止</span></td>
+              <td><span class="badge gray">—</span></td>
+              <td><span class="pickable" style="color:var(--accent)">展开 ▸</span> <span class="pickable" style="color:var(--red)">✕</span></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td><span class="rowname inputable">BUS 帧</span></td>
+              <td><span class="tag frames">1帧</span></td>
+              <td><span class="tag interval inputable">1000 ms</span></td>
+              <td><span class="badge gray">停止</span></td>
+              <td><span class="badge gray">—</span></td>
+              <td><span class="pickable" style="color:var(--accent)">展开 ▸</span> <span class="pickable" style="color:var(--red)">✕</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-head" style="border-top:1px solid var(--line); border-bottom:none; padding:6px 12px">
+        <span class="t">监视流 · 通道 B</span>
+        <span class="hint">TX=橙 / RX=绿 / ERR=红 每帧一行</span>
+        <span class="spacer"></span>
+        <button class="btn sm">暂停</button>
+        <button class="btn sm">清空</button>
+        <button class="btn sm">导出 TX/RX 记录</button>
+      </div>
+      <div class="monitor" id="monB">
+        <div class="mline"><span class="m-time">12:01:05.102</span><span class="m-chan b">B</span><span class="m-dir rx">RX</span><span class="m-st"><span class="badge ok">OK</span></span><span class="m-line-rx">0x1E18003F</span><span class="m-data">00 25 00 02 00 01 02 03</span></div>
+        <div class="mline"><span class="m-time">12:01:05.101</span><span class="m-chan b">B</span><span class="m-dir tx">TX</span><span class="m-st"><span class="badge pend">帧5/5</span></span><span class="m-line-tx">0x1E38003F</span><span class="m-data">1C 1D 1E 1F 20 21 22 55</span></div>
+        <div class="mline"><span class="m-time">12:01:05.100</span><span class="m-chan b">B</span><span class="m-dir tx">TX</span><span class="m-st"><span class="badge pend">帧4/5</span></span><span class="m-line-tx">0x1F38003F</span><span class="m-data">14 15 16 17 18 19 1A 1B</span></div>
+        <div class="mline"><span class="m-time">12:01:05.100</span><span class="m-chan b">B</span><span class="m-dir tx">TX</span><span class="m-st"><span class="badge pend">帧3/5</span></span><span class="m-line-tx">0x1E38003F</span><span class="m-data">0C 0D 0E 0F 10 11 12 13</span></div>
+        <div class="mline"><span class="m-time">12:01:05.099</span><span class="m-chan b">B</span><span class="m-dir tx">TX</span><span class="m-st"><span class="badge pend">帧2/5</span></span><span class="m-line-tx">0x1F38003F</span><span class="m-data">04 05 06 07 08 09 0A 0B</span></div>
+        <div class="mline"><span class="m-time">12:01:05.098</span><span class="m-chan b">B</span><span class="m-dir tx">TX</span><span class="m-st"><span class="badge ok">OK</span></span><span class="m-line-tx">0x1E18003F</span><span class="m-data">00 25 00 02 00 01 02 03</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bottombar">
+  <div class="stat">
+    <span><b>TX</b> <span class="o">A:128</span> · <span class="o">B:96</span></span>
+    <span><b>RX</b> <span class="g">A:128</span> · <span class="g">B:96</span></span>
+    <span><b>错误</b> <span class="r">A:1</span> · B:0</span>
+    <span><b>超时</b> <span class="r">A:0</span> · B:0</span>
+  </div>
+  <span class="spacer"></span>
+  <div class="legend">
+    <span class="li"><i class="dot-tx"></i>发送</span>
+    <span class="li"><i class="dot-rx"></i>接收</span>
+    <span class="li"><i class="dot-err"></i>错误/失败</span>
+    <span class="li"><i class="dot-pend"></i>待应答/分帧中</span>
+  </div>
+</div>
+
+<div class="footer-note">
+  <b>本页交互示意（点击体验）：</b>
+  · 表格行名称 / 间隔 / 预设下拉 用 <span class="inputable">虚线下划线</span> 表示"可输入/可编辑"，点击假想为弹编辑框。
+  · "展开 ▾/▸" 为可点（本页已示范：星敏感器 & 姿态两行处于展开态）。
+  · 运行中（灰色横幅 + 表格只读提示）时：预设下拉、＋添加/删除/复制/导入 均禁用，仅"停止/启停单条"可用。
+  · 顶部 <label>深色模式</label> 复选框可切换 <b>浅色/深色</b> 主题。
+  · 帧明细区每行也带 OK/待应答小标，体现"帧级反馈"。
+  · 底部有 TX/RX/错误/超时 统计条 + 颜色图例。
+</div>
+
+<script>
+  const themeBox = document.querySelector('.topbar input[type=checkbox]');
+  themeBox.addEventListener('change', () => {
+    document.body.classList.toggle('dark', themeBox.checked);
+  });
+  document.querySelectorAll('.pickable, tr, .switch, .mline').forEach(el => {
+    if (el.tagName === 'TR') { el.style.cursor = 'pointer'; }
+  });
+</script>
+</body>
+</html>
