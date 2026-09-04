@@ -13,8 +13,11 @@ import json
 import time
 from datetime import datetime
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QPainter, QCursor
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QRectF, QSize, QPointF
+from PyQt5.QtGui import (
+    QPainter, QCursor, QPen, QBrush, QPainterPath, QFont, QFontMetrics,
+    QColor,
+)
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTabWidget, QWidget, QListWidget, QListWidgetItem, QFrame,
@@ -96,227 +99,352 @@ QMenu::item { padding:6px 22px; border-radius:6px; color:#e8edf5; }
 QMenu::item:selected { background:#1b2a47; color:#4c8dff; }
 """
 
-# 胶囊配色（浅/深）
-CHIP_FRAME = "background:{bg}; color:{fg}; border:1px solid transparent; border-radius:10px; padding:2px 10px; font-size:11px;"
-CHIP_BLUE = CHIP_FRAME.format(bg="#e9f0ff", fg="#2f6fed")
-CHIP_BLUE_D = CHIP_FRAME.format(bg="#1b2a47", fg="#4c8dff")
-CHIP_GREEN = CHIP_FRAME.format(bg="#e5f6ef", fg="#0e9f6e")
-CHIP_GREEN_D = CHIP_FRAME.format(bg="#0f2e22", fg="#2fc48a")
-CHIP_GRAY = CHIP_FRAME.format(bg="#eef1f6", fg="#7c8798")
-CHIP_GRAY_D = CHIP_FRAME.format(bg="#222b38", fg="#8d99a8")
-CHIP_ORANGE = CHIP_FRAME.format(bg="#fdf2dd", fg="#f29400")
-CHIP_ORANGE_D = CHIP_FRAME.format(bg="#32260d", fg="#f6b64a")
-CHIP_PURPLE = CHIP_FRAME.format(bg="#f0eafd", fg="#8b5cf6")
-CHIP_PURPLE_D = CHIP_FRAME.format(bg="#2b2044", fg="#a78bfa")
-BADGE_RED = CHIP_FRAME.format(bg="#fdeaea", fg="#e5484d")
-BADGE_RED_D = CHIP_FRAME.format(bg="#3a1a1d", fg="#f2555a")
-
-
-def _chip_css(color, dark):
-    if color == 'blue':
-        return CHIP_BLUE_D if dark else CHIP_BLUE
-    if color == 'green':
-        return CHIP_GREEN_D if dark else CHIP_GREEN
-    if color == 'orange':
-        return CHIP_ORANGE_D if dark else CHIP_ORANGE
-    if color == 'purple':
-        return CHIP_PURPLE_D if dark else CHIP_PURPLE
-    if color == 'red':
-        return BADGE_RED_D if dark else BADGE_RED
-    return CHIP_GRAY_D if dark else CHIP_GRAY
+# =============================================================
+# 自绘色板（浅/深） —— 供 QPainter 气泡卡片使用
+# =============================================================
 
 
 def _now_ms():
     return datetime.now().strftime("%H:%M:%S.%f")[:-3]
 
 
-class _Chip(QLabel):
-    def __init__(self, text, color='gray', dark=False, parent=None):
-        super().__init__(text, parent)
-        self.setStyleSheet(_chip_css(color, dark))
-        self.setContentsMargins(8, 2, 8, 2)
+def _P(hexs):
+    return QColor(hexs)
+
+
+COL = {
+    'card_bg': _P('#ffffff'),
+    'card_bg_d': _P('#161c26'),
+    'border': _P('#e2e8f2'),
+    'border_d': _P('#263141'),
+    'text': _P('#1d2633'),
+    'text_d': _P('#e8edf5'),
+    'muted': _P('#7c8798'),
+    'muted_d': _P('#8d99a8'),
+    'blue': _P('#2f6fed'),
+    'blue_d': _P('#4c8dff'),
+    'blue_bg': _P('#e9f0ff'),
+    'blue_bg_d': _P('#1b2a47'),
+    'purple': _P('#8b5cf6'),
+    'purple_d': _P('#a78bfa'),
+    'purple_bg': _P('#f0eafd'),
+    'purple_bg_d': _P('#2b2044'),
+    'green': _P('#0e9f6e'),
+    'green_d': _P('#2fc48a'),
+    'green_bg': _P('#e5f6ef'),
+    'green_bg_d': _P('#0f2e22'),
+    'orange': _P('#b45309'),
+    'orange_d': _P('#f6b64a'),
+    'orange_bg': _P('#fdf2dd'),
+    'orange_bg_d': _P('#32260d'),
+    'red': _P('#e5484d'),
+    'red_d': _P('#f2555a'),
+    'red_bg': _P('#fdeaea'),
+    'red_bg_d': _P('#3a1a1d'),
+    'gray_bg': _P('#eef1f6'),
+    'gray_bg_d': _P('#222b38'),
+    'row_open': _P('#eef4ff'),
+    'row_open_d': _P('#1b2a47'),
+    'row_running': _P('#f7faff'),
+    'row_running_d': _P('#1b2330'),
+    'hover_border': _P('#8fb5ff'),
+    'hover_border_d': _P('#4c8dff'),
+    'frame_bg': _P('#f8fafd'),
+    'frame_bg_d': _P('#1b2330'),
+}
+
+
+def _col(key, dark):
+    if key.endswith('_d'):
+        return COL[key]
+    return COL[key + '_d'] if dark and (key + '_d') in COL else COL[key]
 
 
 class _CommandCard(QWidget):
-    """单条指令气泡卡：双击展开/收起，右键出菜单，开关启停。"""
+    """单条指令气泡卡（QPainter 自绘，无子控件）。
+
+    双击展开/收起帧明细；右键出菜单；右侧开关区点击启停。
+    视觉元素全部在 paintEvent 中绘制，矢量圆角 + 平滑文字。
+    """
     dblClicked = pyqtSignal(object)
     toggled = pyqtSignal(object, bool)
     contextMenu = pyqtSignal(object)
+
+    # 折叠/展开时的几何常量
+    ROW_H = 52          # 主行高度
+    PAD_X = 14
+    SWITCH_W = 40       # 右侧开关热区
+    CHEV_W = 22
+    FRAME_H = 22        # 每帧明细行高
 
     def __init__(self, cmd, dark=False, parent=None):
         super().__init__(parent)
         self.cmd = cmd
         self.dark = dark
         self._open = False
+        self._hover = False
+        self._hover_switch = False
+        self._locked = False
+        self._last_result = None        # True/False/None
+        self._last_result_txt = ''
         self.setObjectName('cmdCard')
         self.setCursor(Qt.PointingHandCursor)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        self._build()
-
-    def _build(self):
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
-
-        self.row = QFrame()
-        rh = QHBoxLayout(self.row)
-        rh.setContentsMargins(12, 8, 12, 8)
-        rh.setSpacing(8)
-
-        # 通道徽标
-        self.badge_ch = QLabel('A' if self.cmd.channel == CHAN_A else 'B')
-        self.badge_ch.setAlignment(Qt.AlignCenter)
-        self.badge_ch.setFixedSize(30, 30)
-        color_ch = '#2f6fed' if self.cmd.channel == CHAN_A else '#8b5cf6'
-        self.badge_ch.setStyleSheet(
-            "background:%s; color:#fff; border-radius:9px; font-weight:800;" % color_ch)
-        rh.addWidget(self.badge_ch)
-
-        # 名称 + 首帧ID
-        nm_box = QVBoxLayout()
-        nm_box.setSpacing(0)
-        self.lb_name = QLabel(self.cmd.name)
-        self.lb_name.setStyleSheet("font-weight:700; color:%s;" % ("#1d2633" if not self.dark else "#e8edf5"))
-        self.lb_sub = QLabel('')
-        self.lb_sub.setStyleSheet("font-size:10px; color:#7c8798;")
-        nm_box.addWidget(self.lb_name)
-        nm_box.addWidget(self.lb_sub)
-        nm_w = QWidget()
-        nm_w.setLayout(nm_box)
-        rh.addWidget(nm_w, 1)
-
-        self.chip_frames = _Chip('%d 帧' % len(self.cmd.frames), 'blue', self.dark)
-        rh.addWidget(self.chip_frames)
-        self.chip_interval = _Chip('⏱ %d ms' % self.cmd.interval_ms, 'orange', self.dark)
-        rh.addWidget(self.chip_interval)
-        self.chip_count = _Chip(self._count_text(), 'green', self.dark)
-        rh.addWidget(self.chip_count)
-
-        self.lb_result = QLabel('—')
-        self.lb_result.setStyleSheet("font-size:10px; color:#7c8798; padding:0 6px;")
-        rh.addWidget(self.lb_result)
-
-        self.badge_state = QLabel('停止')
-        self.badge_state.setStyleSheet("font-size:10px; padding:2px 10px; border-radius:9px; color:#7c8798; background:#eef1f6;")
-        rh.addWidget(self.badge_state)
-
-        # 开关
+        self.setAttribute(Qt.WA_Hover, True)
+        self.setMouseTracking(True)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # 伪开关对象：仅承载 checked 状态，逻辑层可 setChecked/信号
         self.sw = QCheckBox()
-        self.sw.setChecked(self.cmd.enabled)
-        self.sw.stateChanged.connect(lambda _: self._on_toggle())
-        rh.addWidget(self.sw)
+        self.sw.setChecked(cmd.enabled)
+        # 字体
+        self._f_name = QFont('Microsoft YaHei UI', 10, QFont.Bold)
+        self._f_sub = QFont('Microsoft YaHei UI', 8)
+        self._f_chip = QFont('Segoe UI', 8)
+        self._f_mono = QFont('Cascadia Code', 9)
 
-        lay.addWidget(self.row)
+    # ---------------- 布局/几何 ----------------
+    def _detail_h(self):
+        return 12 + len(self.cmd.frames) * self.FRAME_H + 8 if self._open else 0
 
-        # 展开帧明细区
-        self.detail = QWidget()
-        dl = QVBoxLayout(self.detail)
-        dl.setContentsMargins(16, 2, 16, 8)
-        dl.setSpacing(2)
-        self.frames_box = QVBoxLayout()
-        self.frames_box.setSpacing(2)
-        dl.addLayout(self.frames_box)
-        self.detail.setVisible(False)
-        lay.addWidget(self.detail)
+    def sizeHint(self):
+        return self.minimumSizeHint()
 
-        self._refresh_row_style()
-        self.refresh_frames()
+    def minimumSizeHint(self):
+        from PyQt5.QtCore import QSize
+        return QSize(240, self.ROW_H + self._detail_h())
 
-    def _count_text(self):
-        return '⇉ ∞ 无限' if self.cmd.is_infinite else '⇉ ×%d 次' % self.cmd.count
-
-    def _refresh_row_style(self):
-        if self._open:
-            bg = '#e9f0ff' if not self.dark else '#1b2a47'
-            bd = '#2f6fed' if not self.dark else '#4c8dff'
-        elif self.cmd.enabled:
-            bg = '#f3f7ff' if not self.dark else '#1b2330'
-            bd = '#c9d9fb' if not self.dark else '#263141'
-        else:
-            bg = '#ffffff' if not self.dark else '#161c26'
-            bd = '#e2e8f2' if not self.dark else '#263141'
-        self.row.setStyleSheet(
-            "QFrame { background:%s; border:1px solid %s; border-radius:12px; }" % (bg, bd))
-
-    def refresh_frames(self):
-        while self.frames_box.count():
-            it = self.frames_box.takeAt(0)
-            w = it.widget()
-            if w:
-                w.deleteLater()
-        for i, f in enumerate(self.cmd.frames):
-            fr = QFrame()
-            fr.setStyleSheet("background:%s; border-radius:8px;" %
-                             ("#f8fafd" if not self.dark else "#1b2330"))
-            fl = QHBoxLayout(fr)
-            fl.setContentsMargins(10, 2, 10, 2)
-            seq = QLabel('#%d' % (i + 1))
-            seq.setStyleSheet("color:#7c8798; min-width:24px; font-family:'Consolas';")
-            cid = QLabel('0x%X' % f.id)
-            cid.setStyleSheet("font-weight:700; color:%s; font-family:'Consolas';" %
-                              ("#2f6fed" if not self.dark else "#4c8dff"))
-            dhex = QLabel(' '.join('%02X' % b for b in f.data))
-            dhex.setStyleSheet("color:#7c8798; font-family:'Consolas';")
-            fl.addWidget(seq)
-            fl.addWidget(cid)
-            fl.addWidget(dhex)
-            fl.addStretch(1)
-            self.frames_box.addWidget(fr)
-
+    # ---------------- 状态接口（逻辑层使用） ----------------
     def update_from_cmd(self):
-        self.lb_name.setText(self.cmd.name)
-        self.lb_sub.setText('首帧ID: 0x%X' % self.cmd.frames[0].id if self.cmd.frames else '')
-        self.chip_frames.setText('%d 帧' % len(self.cmd.frames))
-        self.chip_interval.setText('⏱ %d ms' % self.cmd.interval_ms)
-        self.chip_count.setText(self._count_text())
         self.sw.blockSignals(True)
         self.sw.setChecked(self.cmd.enabled)
         self.sw.blockSignals(False)
-        if self.cmd.enabled:
-            self.badge_state.setText('运行中')
-            self.badge_state.setStyleSheet("font-size:10px; padding:2px 10px; border-radius:9px; color:%s; background:%s;" %
-                                           ("#2f6fed" if not self.dark else "#4c8dff",
-                                            "#e9f0ff" if not self.dark else "#1b2a47"))
-        else:
-            self.badge_state.setText('停止')
-            self.badge_state.setStyleSheet("font-size:10px; padding:2px 10px; border-radius:9px; color:#7c8798; background:#eef1f6;")
-        self._refresh_row_style()
+        self.update()
+
+    def set_locked(self, locked):
+        self._locked = locked
+        self.update()
 
     def set_result(self, ok):
+        self._last_result = ok
         if ok is None:
-            self.lb_result.setText('—')
-            self.lb_result.setStyleSheet("font-size:10px; color:#7c8798; padding:0 6px;")
+            self._last_result_txt = ''
         elif ok:
-            self.lb_result.setText('最近成功 ' + _now_ms())
-            self.lb_result.setStyleSheet("font-size:10px; color:#0e9f6e; padding:0 6px; font-weight:600;")
+            self._last_result_txt = '成功'
         else:
-            self.lb_result.setText('TX 失败')
-            self.lb_result.setStyleSheet("font-size:10px; color:#e5484d; padding:0 6px; font-weight:600;")
+            self._last_result_txt = 'TX失败'
+        self.update()
 
-    # ---------- 事件 ----------
-    def _on_toggle(self):
-        self.cmd.enabled = self.sw.isChecked()
-        self.toggled.emit(self, self.cmd.enabled)
+    def set_last_result_text(self, txt):
+        if txt and txt.startswith('已完成'):
+            self._last_result = True
+        elif txt and txt.startswith('成功'):
+            self._last_result = True
+        elif txt:
+            self._last_result = False
+        else:
+            self._last_result = None
+        self._last_result_txt = txt
+        self.update()
+
+    def refresh_frames(self):
+        self.update()
 
     def set_open(self, open_):
         self._open = open_
-        self.detail.setVisible(open_)
-        self._refresh_row_style()
+        self.update()
+
+    # ---------------- 事件 ----------------
+    def enterEvent(self, e):
+        self._hover = True
+        self.update()
+        super().enterEvent(e)
+
+    def leaveEvent(self, e):
+        self._hover = False
+        self._hover_switch = False
+        self.update()
+        super().leaveEvent(e)
+
+    def mouseMoveEvent(self, e):
+        hs = self._switch_rect().contains(e.pos())
+        if hs != self._hover_switch:
+            self._hover_switch = hs
+            self.update()
+        super().mouseMoveEvent(e)
+
+    def _switch_rect(self):
+        from PyQt5.QtCore import QRectF
+        w = self.width()
+        return QRectF(w - self.SWITCH_W - 10, (self.ROW_H - 18) / 2.0, self.SWITCH_W, 18)
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            if not self._locked and self._switch_rect().contains(e.pos()):
+                self.cmd.enabled = not self.cmd.enabled
+                self.sw.setChecked(self.cmd.enabled)
+                self.toggled.emit(self, self.cmd.enabled)
+                self.update()
+                return
+        super().mouseReleaseEvent(e)
 
     def mouseDoubleClickEvent(self, e):
-        if e.button() == Qt.LeftButton:
+        if e.button() == Qt.LeftButton and not self._switch_rect().contains(e.pos()):
             self.dblClicked.emit(self)
 
     def contextMenuEvent(self, e):
         self.contextMenu.emit(self)
 
+    # ---------------- 绘制 ----------------
     def paintEvent(self, e):
-        opt = QStyleOption()
-        opt.initFrom(self)
         p = QPainter(self)
-        self.style().drawPrimitive(QStyle.PE_Widget, opt, p, self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        dark = self.dark
+        w = self.width()
+        h = self.height()
+
+        # 卡片底
+        if self._open:
+            bg = _col('row_open', dark)
+            bd = _col('blue', dark)
+        elif self.cmd.enabled:
+            bg = _col('row_running', dark)
+            bd = _col('blue', dark)
+        else:
+            bg = _col('card_bg', dark)
+            bd = _col('border', dark)
+        if self._hover:
+            bd = _col('hover_border', dark)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 10, 10)
+        p.setPen(QPen(bd, 1))
+        p.setBrush(bg)
+        p.drawPath(path)
+
+        y0 = 0.0
+        x0 = float(self.PAD_X)
+        accent = _col('blue' if self.cmd.channel == CHAN_A else 'purple', dark)
+        accent_bg = _col('blue_bg' if self.cmd.channel == CHAN_A else 'purple_bg', dark)
+
+        # 通道字母圆块
+        bx, by = x0, 11
+        p.setPen(Qt.NoPen)
+        p.setBrush(accent)
+        p.drawRoundedRect(QRectF(bx, by, 30, 30), 8, 8)
+        f_ch = QFont('Segoe UI', 11, QFont.Bold)
+        p.setFont(f_ch)
+        p.setPen(QColor('#ffffff'))
+        p.drawText(QRectF(bx, by, 30, 30), Qt.AlignCenter, self.cmd.channel)
+
+        # 名称起始 x（实际绘制在胶囊排完后，用剩余宽度）
+        nx = bx + 30 + 10
+        fm_name = QFontMetrics(self._f_name)
+        fm_sub = QFontMetrics(self._f_sub)
+
+        # ---- 右侧：开关 -> chevron -> 状态/结果 -> 胶囊(向左) ----
+        chippy = (self.ROW_H - 20) / 2.0
+        fm_chip = QFontMetrics(self._f_chip)
+        # 开关（画在右侧热区）
+        swr = self._switch_rect()
+        p.setPen(Qt.NoPen)
+        if self._locked:
+            p.setBrush(_col('gray_bg', dark))
+            p.drawRoundedRect(QRectF(swr.x(), swr.y(), swr.width(), swr.height()), 9, 9)
+            p.setBrush(QColor('#cbd5e1'))
+            p.drawEllipse(QRectF(swr.x() + swr.width() / 2 - 6, swr.y() + 3, 12, 12))
+        elif self.cmd.enabled:
+            p.setBrush(_col('green', dark))
+            p.drawRoundedRect(QRectF(swr.x(), swr.y(), swr.width(), swr.height()), 9, 9)
+            # 圆点右移
+            p.setBrush(QColor('#ffffff'))
+            p.drawEllipse(QRectF(swr.x() + swr.width() - 17, swr.y() + 3, 12, 12))
+        else:
+            p.setBrush(_col('gray_bg', dark))
+            p.drawRoundedRect(QRectF(swr.x(), swr.y(), swr.width(), swr.height()), 9, 9)
+            p.setBrush(QColor('#ffffff'))
+            p.drawEllipse(QRectF(swr.x() + 3, swr.y() + 3, 12, 12))
+
+        # 状态/结果/胶囊：从 chevron 左侧向右排
+        def chip_w(txt):
+            return fm_chip.horizontalAdvance(txt) + 14
+
+        # 状态文本（失败优先于运行中，红胶囊提示最近一次发送失败）
+        if self._last_result_txt.startswith('已完成'):
+            st_t, st_bg, st_fg = '已完成', _col('green_bg', dark), _col('green', dark)
+        elif self._last_result_txt.startswith('TX失败'):
+            st_t, st_bg, st_fg = 'TX失败', _col('red_bg', dark), _col('red', dark)
+        elif self.cmd.enabled:
+            st_t, st_bg, st_fg = '运行中', accent_bg, accent
+        elif self._last_result_txt.startswith('成功'):
+            st_t, st_bg, st_fg = '运行', _col('green_bg', dark), _col('green', dark)
+        else:
+            st_t, st_bg, st_fg = '停止', _col('gray_bg', dark), _col('muted', dark)
+
+        # 自右往左收集：开关(最右)已占位，其左依次：结果胶囊、状态胶囊、次数、间隔、帧数
+        texts = []
+        # 最近结果胶囊：失败/已完成 有独立视觉；运行成功并入"运行中"状态表达
+        if self._last_result_txt and self._last_result_txt not in ('成功',):
+            texts.append((self._last_result_txt, _col('gray_bg', dark), _col('muted', dark)))
+        texts.append((st_t, st_bg, st_fg))
+        texts.append(('⇉ %s' % ('∞' if self.cmd.is_infinite else '×%d' % self.cmd.count),
+                      _col('green_bg', dark), _col('green', dark)))
+        texts.append(('⏱ %d ms' % self.cmd.interval_ms, _col('orange_bg', dark), _col('orange', dark)))
+        texts.append(('%d 帧' % len(self.cmd.frames), _col('blue_bg', dark), _col('blue', dark)))
+
+        total_chip_w = sum(chip_w(t) + 6 for t, _, _ in texts)
+        # 从开关左侧开始向左排
+        right_edge = swr.x() - 8
+        # 先排 chip，再把剩余空隙给名字
+        cx = right_edge
+        p.setFont(self._f_chip)
+        for txt, tbg, tfg in texts:
+            cw = chip_w(txt)
+            cx -= cw
+            # chip 底
+            p.setPen(Qt.NoPen)
+            p.setBrush(tbg)
+            p.drawRoundedRect(QRectF(cx, chippy, cw, 20), 10, 10)
+            p.setPen(tfg)
+            p.drawText(QRectF(cx, chippy, cw, 20), Qt.AlignCenter, txt)
+            cx -= 6
+
+        # 名称（用胶囊区左缘作为右限，避免重叠）
+        name_right = cx
+        name_w = name_right - nx
+        if name_w > 60:
+            p.setFont(self._f_name)
+            p.setPen(_col('text', dark))
+            name = self.cmd.name
+            if fm_name.horizontalAdvance(name) > name_w:
+                name = fm_name.elidedText(name, Qt.ElideRight, int(name_w))
+            p.drawText(QRectF(nx, 6, name_w, 20), Qt.AlignLeft | Qt.AlignVCenter, name)
+            p.setFont(self._f_sub)
+            p.setPen(_col('muted', dark))
+            sub = '首帧ID 0x%X' % self.cmd.frames[0].id if self.cmd.frames else ''
+            p.drawText(QRectF(nx, 28, name_w, 14), Qt.AlignLeft | Qt.AlignVCenter, sub)
+
+        # ---- 展开区帧明细 ----
+        if self._open:
+            fy = self.ROW_H + 6
+            p.setFont(self._f_mono)
+            for i, f in enumerate(self.cmd.frames):
+                p.setPen(Qt.NoPen)
+                p.setBrush(_col('frame_bg', dark))
+                p.drawRoundedRect(QRectF(x0, fy, w - 2 * x0, self.FRAME_H - 4), 5, 5)
+                # 序号
+                p.setPen(_col('muted', dark))
+                p.drawText(QRectF(x0 + 8, fy, 34, self.FRAME_H - 4), Qt.AlignLeft | Qt.AlignVCenter, '#%d' % (i + 1))
+                # ID
+                p.setPen(accent)
+                p.drawText(QRectF(x0 + 46, fy, 110, self.FRAME_H - 4), Qt.AlignLeft | Qt.AlignVCenter,
+                           '0x%X' % f.id)
+                # 数据
+                data = ' '.join('%02X' % b for b in f.data)
+                p.setPen(_col('text', dark))
+                p.drawText(QRectF(x0 + 160, fy, w - 2 * x0 - 170, self.FRAME_H - 4),
+                           Qt.AlignLeft | Qt.AlignVCenter, data)
+                fy += self.FRAME_H
         p.end()
         super().paintEvent(e)
+
 
 class NewCanWindow(QDialog):
     """主窗口：总线卡片 + A/B Tab 指令配置 + 统一监视流。"""
@@ -852,8 +980,9 @@ class NewCanWindow(QDialog):
             for i in range(lst.count()):
                 it = lst.item(i)
                 if lst.itemWidget(it) is card:
-                    card.adjustSize()
-                    it.setSizeHint(card.sizeHint())
+                    h = card.ROW_H + (12 + len(card.cmd.frames) * card.FRAME_H + 8
+                                       if card._open else 0)
+                    it.setSizeHint(QSize(200, h))
                     lst.update()
                     return
 
@@ -960,7 +1089,7 @@ class NewCanWindow(QDialog):
                 it = lst.item(i)
                 card = lst.itemWidget(it)
                 if card:
-                    card.sw.setEnabled(enabled)
+                    card.set_locked(not enabled)
         for btns in (getattr(self, 'toolBtnsA', None), getattr(self, 'toolBtnsB', None)):
             if btns:
                 for b in btns.values():
@@ -1000,11 +1129,8 @@ class NewCanWindow(QDialog):
         self._refresh_stats()
 
     def _mon_append(self, tag, msg, kind='info'):
-        colors = {'tx': '#2f6fed', 'rx': '#0e9f6e', 'err': '#e5484d',
-                  'info': '#7c8798', 'system': '#8b5cf6', 'CMD': '#f29400'}
-        c = colors.get(kind, '#7c8798')
-        self.mon.appendHtml('<span style="color:%s">[%s] %s</span> %s' %
-                            (c, _now_ms(), tag, msg.replace('<', '&lt;')))
+        # 纯文本追加（避免高频富文本解析导致 offscreen 崩溃/真机卡顿）
+        self.mon.appendPlainText("[%s] %s  %s" % (_now_ms(), tag, msg))
 
     def _refresh_stats(self):
         self.lb_stats.setText(
@@ -1026,9 +1152,7 @@ class NewCanWindow(QDialog):
             if card:
                 card.cmd.enabled = False
                 card.sw.setChecked(False)
-                card.set_result(None)
-                card.lb_result.setText("已完成")
-                card.lb_result.setStyleSheet("font-size:10px; color:#0e9f6e; padding:0 6px; font-weight:600;")
+                card.set_last_result_text("已完成")
                 card.update_from_cmd()
             self._mon_append("SYSTEM", "指令 %s 已达发送次数，自动停止" % c.name, 'info')
 
