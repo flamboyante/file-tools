@@ -16,7 +16,7 @@ from datetime import datetime
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QRectF, QSize, QPointF
 from PyQt5.QtGui import (
     QPainter, QCursor, QPen, QBrush, QPainterPath, QFont, QFontMetrics,
-    QColor,
+    QFontDatabase, QTextCharFormat, QSyntaxHighlighter, QColor,
 )
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -38,30 +38,34 @@ CHAN_B = 'B'
 STATUS_OK = 1
 
 LIGHT_QSS = """
-QDialog, QWidget#root { background:#eef2f9; }
-QWidget#busCard { background:#fff; border:1px solid #e2e8f2; border-radius:10px; }
-QWidget#panelCard { background:#fff; border:1px solid #e2e8f2; border-radius:12px; }
-QLabel#appTitle { font-size:16px; font-weight:700; color:#1d2633; }
+QDialog, QWidget#root {
+    background:#f3f6fb;
+    font-family:'Microsoft YaHei UI','Microsoft YaHei','PingFang SC',sans-serif;
+    font-size:13px; color:#1d2633;
+}
+QWidget#busCard { background:#fff; border:1px solid #dfe7f1; border-radius:12px; }
+QWidget#panelCard { background:#fff; border:1px solid #dfe7f1; border-radius:12px; }
+QLabel#appTitle { font-size:18px; font-weight:700; color:#162033; }
 QLabel#busName { font-weight:700; color:#1d2633; }
-QLabel#secTitle { font-size:13.5px; font-weight:700; color:#1d2633; }
+QLabel#secTitle { font-size:14px; font-weight:700; color:#1d2633; }
 QLabel#muted { color:#7c8798; }
 QLabel#mono { font-family:'Cascadia Code','Consolas',monospace; color:#1d2633; }
-QPushButton { background:#fff; border:1px solid #d4dbe8; border-radius:8px; padding:5px 12px; color:#1d2633; }
+QPushButton { background:#fff; border:1px solid #cfd9e6; border-radius:8px; padding:6px 14px; color:#1d2633; }
 QPushButton:hover { border-color:#2f6fed; color:#2f6fed; }
 QPushButton:disabled { color:#b0b8c6; border-color:#e2e8f2; background:#f4f6fb; }
 QPushButton#primary { background:#2f6fed; color:#fff; border:none; }
 QPushButton#primary:hover { background:#1f5ee8; }
 QPushButton#danger { color:#e5484d; }
-QPushButton#small { padding:2px 8px; font-size:11px; border-radius:6px; }
-QListWidget#cmdList { background:transparent; border:none; outline:none; }
-QTabWidget::pane { border:1px solid #e2e8f2; border-radius:10px; top:-1px; background:#fff; }
-QTabBar::tab { background:transparent; color:#7c8798; padding:7px 18px; border:1px solid transparent; border-bottom:none; font-weight:600; }
-QTabBar::tab:selected { background:#fff; color:#1d2633; border:1px solid #e2e8f2; border-bottom:none; border-radius:8px 8px 0 0; }
-QComboBox, QLineEdit { background:#fff; border:1px solid #d4dbe8; border-radius:6px; padding:3px 8px; }
+QPushButton#small { padding:4px 10px; font-size:12px; border-radius:6px; }
+QListWidget#cmdList { background:transparent; border:none; outline:none; padding:4px 2px; }
+QTabWidget::pane { border:1px solid #dfe7f1; border-radius:10px; top:-1px; background:#fff; }
+QTabBar::tab { background:transparent; color:#7c8798; padding:9px 24px; border:1px solid transparent; border-bottom:2px solid transparent; font-size:13px; font-weight:600; }
+QTabBar::tab:selected { background:#fff; color:#2f6fed; border:1px solid #dfe7f1; border-bottom:2px solid #2f6fed; border-radius:8px 8px 0 0; }
+QComboBox, QLineEdit { background:#fff; border:1px solid #cfd9e6; border-radius:7px; padding:5px 9px; }
 QComboBox:disabled, QLineEdit:disabled { color:#b0b8c6; background:#f4f6fb; }
-QTextEdit { background:#fff; border:1px solid #e2e8f2; border-radius:8px; }
+QTextEdit, QPlainTextEdit { background:#f8faff; border:1px solid #d9e3ef; border-radius:10px; padding:8px; }
 QScrollBar:vertical { background:transparent; width:8px; }
-QScrollBar::handle:vertical { background:#c6cfdd; border-radius:4px; min-height:30px; }
+QScrollBar::handle:vertical { background:#c3cfdd; border-radius:4px; min-height:30px; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
 QMenu { background:#fff; border:1px solid #e2e8f2; border-radius:8px; padding:4px; }
 QMenu::item { padding:6px 22px; border-radius:6px; }
@@ -69,28 +73,32 @@ QMenu::item:selected { background:#e9f0ff; color:#2f6fed; }
 """
 
 DARK_QSS = """
-QDialog, QWidget#root { background:#0d1117; }
+QDialog, QWidget#root {
+    background:#0d1117;
+    font-family:'Microsoft YaHei UI','Microsoft YaHei','PingFang SC',sans-serif;
+    font-size:13px; color:#e8edf5;
+}
 QWidget#busCard { background:#161c26; border:1px solid #263141; border-radius:10px; }
 QWidget#panelCard { background:#161c26; border:1px solid #263141; border-radius:12px; }
-QLabel#appTitle { font-size:16px; font-weight:700; color:#e8edf5; }
+QLabel#appTitle { font-size:18px; font-weight:700; color:#f1f5f9; }
 QLabel#busName { font-weight:700; color:#e8edf5; }
-QLabel#secTitle { font-size:13.5px; font-weight:700; color:#e8edf5; }
+QLabel#secTitle { font-size:14px; font-weight:700; color:#e8edf5; }
 QLabel#muted { color:#8d99a8; }
 QLabel#mono { font-family:'Cascadia Code','Consolas',monospace; color:#e8edf5; }
-QPushButton { background:#1c2129; border:1px solid #3a4350; border-radius:8px; padding:5px 12px; color:#e8edf5; }
+QPushButton { background:#1c2129; border:1px solid #344153; border-radius:8px; padding:6px 14px; color:#e8edf5; }
 QPushButton:hover { border-color:#4c8dff; color:#4c8dff; }
 QPushButton:disabled { color:#4b5563; border-color:#263141; background:#171b22; }
 QPushButton#primary { background:#4c8dff; color:#fff; border:none; }
 QPushButton#primary:hover { background:#6ba2ff; }
 QPushButton#danger { color:#f2555a; }
-QPushButton#small { padding:2px 8px; font-size:11px; border-radius:6px; }
-QListWidget#cmdList { background:transparent; border:none; outline:none; }
+QPushButton#small { padding:4px 10px; font-size:12px; border-radius:6px; }
+QListWidget#cmdList { background:transparent; border:none; outline:none; padding:4px 2px; }
 QTabWidget::pane { border:1px solid #263141; border-radius:10px; top:-1px; background:#161c26; }
 QTabBar::tab { background:transparent; color:#8d99a8; padding:7px 18px; border:1px solid transparent; border-bottom:none; font-weight:600; }
 QTabBar::tab:selected { background:#161c26; color:#e8edf5; border:1px solid #263141; border-bottom:none; border-radius:8px 8px 0 0; }
-QComboBox, QLineEdit { background:#1c2129; border:1px solid #3a4350; border-radius:6px; padding:3px 8px; color:#e8edf5; }
+QComboBox, QLineEdit { background:#1c2129; border:1px solid #344153; border-radius:7px; padding:5px 9px; color:#e8edf5; }
 QComboBox:disabled, QLineEdit:disabled { color:#4b5563; background:#171b22; }
-QTextEdit { background:#161c26; border:1px solid #263141; border-radius:8px; color:#e8edf5; }
+QTextEdit, QPlainTextEdit { background:#141b26; border:1px solid #2b3748; border-radius:10px; padding:8px; color:#e8edf5; }
 QScrollBar:vertical { background:transparent; width:8px; }
 QScrollBar::handle:vertical { background:#3a4350; border-radius:4px; min-height:30px; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
@@ -115,7 +123,7 @@ def _P(hexs):
 COL = {
     'card_bg': _P('#ffffff'),
     'card_bg_d': _P('#161c26'),
-    'border': _P('#e2e8f2'),
+    'border': _P('#dfe7f1'),
     'border_d': _P('#263141'),
     'text': _P('#1d2633'),
     'text_d': _P('#e8edf5'),
@@ -143,9 +151,9 @@ COL = {
     'red_bg_d': _P('#3a1a1d'),
     'gray_bg': _P('#eef1f6'),
     'gray_bg_d': _P('#222b38'),
-    'row_open': _P('#eef4ff'),
+    'row_open': _P('#f2f7ff'),
     'row_open_d': _P('#1b2a47'),
-    'row_running': _P('#f7faff'),
+    'row_running': _P('#f8fbff'),
     'row_running_d': _P('#1b2330'),
     'hover_border': _P('#8fb5ff'),
     'hover_border_d': _P('#4c8dff'),
@@ -154,10 +162,61 @@ COL = {
 }
 
 
+class _MonitorHighlighter(QSyntaxHighlighter):
+    """给纯文本监视流着色，避免 QTextEdit 富文本在高频收发时变慢。"""
+
+    def __init__(self, document, dark=False):
+        super().__init__(document)
+        self.dark = dark
+
+    def highlightBlock(self, text):
+        if not text:
+            return
+        normal = QColor('#dbe5f0') if self.dark else QColor('#334155')
+        muted = QColor('#94a3b8') if self.dark else QColor('#64748b')
+        blue = QColor('#6da1ff') if self.dark else QColor('#2563eb')
+        green = QColor('#47d39b') if self.dark else QColor('#0e9f6e')
+        red = QColor('#ff7378') if self.dark else QColor('#dc3545')
+        purple = QColor('#c0a6ff') if self.dark else QColor('#7c3aed')
+
+        base = QTextCharFormat()
+        base.setForeground(normal)
+        self.setFormat(0, len(text), base)
+
+        if 'ERR' in text or 'FAIL' in text or '错误' in text:
+            base.setForeground(red)
+        elif 'RX' in text:
+            base.setForeground(green)
+        elif 'TX' in text:
+            base.setForeground(blue)
+        elif 'SYSTEM' in text:
+            base.setForeground(purple)
+        else:
+            base.setForeground(muted)
+        self.setFormat(0, len(text), base)
+
+        for token, color in (('[A]', blue), (' A ', blue), ('[B]', purple), (' B ', purple)):
+            start = text.find(token)
+            if start >= 0:
+                fmt = QTextCharFormat()
+                fmt.setForeground(color)
+                fmt.setFontWeight(QFont.Bold)
+                self.setFormat(start, len(token), fmt)
+
+
 def _col(key, dark):
     if key.endswith('_d'):
         return COL[key]
     return COL[key + '_d'] if dark and (key + '_d') in COL else COL[key]
+
+
+def _ui_font(size, weight=QFont.Normal, fixed=False):
+    """使用系统实际存在的字体，避免硬编码字体在不同机器上回退异常。"""
+    kind = QFontDatabase.FixedFont if fixed else QFontDatabase.GeneralFont
+    font = QFontDatabase.systemFont(kind)
+    font.setPointSizeF(size)
+    font.setWeight(weight)
+    return font
 
 
 class _CommandCard(QWidget):
@@ -171,11 +230,11 @@ class _CommandCard(QWidget):
     contextMenu = pyqtSignal(object)
 
     # 折叠/展开时的几何常量
-    ROW_H = 52          # 主行高度
+    ROW_H = 62          # 主行高度
     PAD_X = 14
     SWITCH_W = 40       # 右侧开关热区
     CHEV_W = 22
-    FRAME_H = 22        # 每帧明细行高
+    FRAME_H = 26        # 每帧明细行高
 
     def __init__(self, cmd, dark=False, parent=None):
         super().__init__(parent)
@@ -193,13 +252,15 @@ class _CommandCard(QWidget):
         self.setMouseTracking(True)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         # 伪开关对象：仅承载 checked 状态，逻辑层可 setChecked/信号
-        self.sw = QCheckBox()
+        self.sw = QCheckBox(self)
         self.sw.setChecked(cmd.enabled)
+        self.sw.hide()
         # 字体
-        self._f_name = QFont('Microsoft YaHei UI', 10, QFont.Bold)
-        self._f_sub = QFont('Microsoft YaHei UI', 8)
-        self._f_chip = QFont('Segoe UI', 8)
-        self._f_mono = QFont('Cascadia Code', 9)
+        self._f_name = _ui_font(10.5, QFont.DemiBold)
+        self._f_sub = _ui_font(8.5)
+        self._f_chip = _ui_font(8.5)
+        self._f_mono = _ui_font(9, fixed=True)
+        self._f_ch_badge = _ui_font(11, QFont.Bold)
 
     # ---------------- 布局/几何 ----------------
     def _detail_h(self):
@@ -301,21 +362,30 @@ class _CommandCard(QWidget):
         w = self.width()
         h = self.height()
 
-        # 卡片底
+        # 卡片底（保持边框轻、靠底色和左侧徽标区分状态）
         if self._open:
             bg = _col('row_open', dark)
-            bd = _col('blue', dark)
+            bd = _col('border', dark)
         elif self.cmd.enabled:
             bg = _col('row_running', dark)
-            bd = _col('blue', dark)
+            bd = _col('border', dark)
         else:
             bg = _col('card_bg', dark)
             bd = _col('border', dark)
         if self._hover:
             bd = _col('hover_border', dark)
+        R = 12
+        # 底部柔和投影：向下偏移的 3 层半透明
+        if not dark:
+            for off, alpha in ((3, 14), (2, 18), (1, 22)):
+                sh = QPainterPath()
+                sh.addRoundedRect(QRectF(off, off, w - 1 - off, h - 1 - off), R, R)
+                p.setPen(Qt.NoPen)
+                p.setBrush(QColor(31, 41, 55, alpha))
+                p.drawPath(sh)
         path = QPainterPath()
-        path.addRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 10, 10)
-        p.setPen(QPen(bd, 1))
+        path.addRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), R, R)
+        p.setPen(QPen(bd, 1.0 if not self._hover else 1.4))
         p.setBrush(bg)
         p.drawPath(path)
 
@@ -324,23 +394,28 @@ class _CommandCard(QWidget):
         accent = _col('blue' if self.cmd.channel == CHAN_A else 'purple', dark)
         accent_bg = _col('blue_bg' if self.cmd.channel == CHAN_A else 'purple_bg', dark)
 
-        # 通道字母圆块
-        bx, by = x0, 11
+        # 左侧保留一条细通道色带，比整张卡片描蓝边更柔和
         p.setPen(Qt.NoPen)
         p.setBrush(accent)
-        p.drawRoundedRect(QRectF(bx, by, 30, 30), 8, 8)
-        f_ch = QFont('Segoe UI', 11, QFont.Bold)
-        p.setFont(f_ch)
+        p.drawRoundedRect(QRectF(1, 12, 4, max(18, h - 24)), 2, 2)
+
+        # 通道字母圆块
+        bx, by = x0, 15
+        p.setPen(QPen(QColor('#ffffff'), 1.5))
+        p.setBrush(accent)
+        p.drawRoundedRect(QRectF(bx, by, 32, 32), 9, 9)
+        p.setFont(self._f_ch_badge)
         p.setPen(QColor('#ffffff'))
-        p.drawText(QRectF(bx, by, 30, 30), Qt.AlignCenter, self.cmd.channel)
+        p.drawText(QRectF(bx, by, 32, 32), Qt.AlignCenter, self.cmd.channel)
 
         # 名称起始 x（实际绘制在胶囊排完后，用剩余宽度）
-        nx = bx + 30 + 10
+        nx = bx + 32 + 10
         fm_name = QFontMetrics(self._f_name)
         fm_sub = QFontMetrics(self._f_sub)
 
-        # ---- 右侧：开关 -> chevron -> 状态/结果 -> 胶囊(向左) ----
-        chippy = (self.ROW_H - 20) / 2.0
+        # ---- 右侧：开关 -> 状态/结果 -> 胶囊(向左) ----
+        chip_hh = 22
+        chippy = (self.ROW_H - chip_hh) / 2.0
         fm_chip = QFontMetrics(self._f_chip)
         # 开关（画在右侧热区）
         swr = self._switch_rect()
@@ -362,9 +437,9 @@ class _CommandCard(QWidget):
             p.setBrush(QColor('#ffffff'))
             p.drawEllipse(QRectF(swr.x() + 3, swr.y() + 3, 12, 12))
 
-        # 状态/结果/胶囊：从 chevron 左侧向右排
+        # 状态/结果/胶囊：从开关左侧向右排
         def chip_w(txt):
-            return fm_chip.horizontalAdvance(txt) + 14
+            return fm_chip.horizontalAdvance(txt) + 18
 
         # 状态文本（失败优先于运行中，红胶囊提示最近一次发送失败）
         if self._last_result_txt.startswith('已完成'):
@@ -384,9 +459,9 @@ class _CommandCard(QWidget):
         if self._last_result_txt and self._last_result_txt not in ('成功',):
             texts.append((self._last_result_txt, _col('gray_bg', dark), _col('muted', dark)))
         texts.append((st_t, st_bg, st_fg))
-        texts.append(('⇉ %s' % ('∞' if self.cmd.is_infinite else '×%d' % self.cmd.count),
+        texts.append(('次数 %s' % ('无限' if self.cmd.is_infinite else 'x%d' % self.cmd.count),
                       _col('green_bg', dark), _col('green', dark)))
-        texts.append(('⏱ %d ms' % self.cmd.interval_ms, _col('orange_bg', dark), _col('orange', dark)))
+        texts.append(('周期 %d ms' % self.cmd.interval_ms, _col('gray_bg', dark), _col('muted', dark)))
         texts.append(('%d 帧' % len(self.cmd.frames), _col('blue_bg', dark), _col('blue', dark)))
 
         total_chip_w = sum(chip_w(t) + 6 for t, _, _ in texts)
@@ -401,9 +476,9 @@ class _CommandCard(QWidget):
             # chip 底
             p.setPen(Qt.NoPen)
             p.setBrush(tbg)
-            p.drawRoundedRect(QRectF(cx, chippy, cw, 20), 10, 10)
+            p.drawRoundedRect(QRectF(cx, chippy, cw, 22), 11, 11)
             p.setPen(tfg)
-            p.drawText(QRectF(cx, chippy, cw, 20), Qt.AlignCenter, txt)
+            p.drawText(QRectF(cx, chippy, cw, 22), Qt.AlignCenter, txt)
             cx -= 6
 
         # 名称（用胶囊区左缘作为右限，避免重叠）
@@ -415,11 +490,11 @@ class _CommandCard(QWidget):
             name = self.cmd.name
             if fm_name.horizontalAdvance(name) > name_w:
                 name = fm_name.elidedText(name, Qt.ElideRight, int(name_w))
-            p.drawText(QRectF(nx, 6, name_w, 20), Qt.AlignLeft | Qt.AlignVCenter, name)
+            p.drawText(QRectF(nx, 9, name_w, 22), Qt.AlignLeft | Qt.AlignVCenter, name)
             p.setFont(self._f_sub)
             p.setPen(_col('muted', dark))
             sub = '首帧ID 0x%X' % self.cmd.frames[0].id if self.cmd.frames else ''
-            p.drawText(QRectF(nx, 28, name_w, 14), Qt.AlignLeft | Qt.AlignVCenter, sub)
+            p.drawText(QRectF(nx, 34, name_w, 15), Qt.AlignLeft | Qt.AlignVCenter, sub)
 
         # ---- 展开区帧明细 ----
         if self._open:
@@ -452,7 +527,9 @@ class NewCanWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("CAN 新版 · 多指令定时发送")
-        self.resize(1280, 800)
+        self.resize(1180, 760)          # 初始尺寸(最大化前)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint)
+        self.setFont(_ui_font(10))
         self._dark = False
         self._running = False
 
@@ -485,6 +562,7 @@ class NewCanWindow(QDialog):
         self._ui_timer = QTimer(self)
         self._ui_timer.timeout.connect(self._on_ui_tick)
         self._ui_timer.start(10)   # 10ms 心跳，支撑最小 10ms 发送间隔
+        QTimer.singleShot(0, self.showMaximized)
 
     # =========================================================
     # UI 构建
@@ -492,14 +570,23 @@ class NewCanWindow(QDialog):
     def _build_ui(self):
         self.setObjectName('root')
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(10)
+        root.setContentsMargins(20, 16, 20, 16)
+        root.setSpacing(14)
 
         # 顶栏
         top = QHBoxLayout()
+        title_box = QVBoxLayout()
+        title_box.setContentsMargins(0, 0, 0, 0)
+        title_box.setSpacing(1)
         self.lb_title = QLabel("CAN 新版 · 多指令定时发送")
         self.lb_title.setObjectName('appTitle')
-        top.addWidget(self.lb_title)
+        title_box.addWidget(self.lb_title)
+        subtitle = QLabel("双通道 · 多帧指令 · 周期发送与收发监视")
+        subtitle.setObjectName('muted')
+        title_box.addWidget(subtitle)
+        title_widget = QWidget()
+        title_widget.setLayout(title_box)
+        top.addWidget(title_widget)
         top.addStretch(1)
 
         btn_import = QPushButton("导入配置")
@@ -535,10 +622,10 @@ class NewCanWindow(QDialog):
         self.tabs = QTabWidget()
         self.tabs.addTab(self._make_cmd_tab(CHAN_A), "通道 A")
         self.tabs.addTab(self._make_cmd_tab(CHAN_B), "通道 B")
-        root.addWidget(self.tabs, 2)
+        root.addWidget(self.tabs, 3)
 
         # 监视区
-        root.addWidget(self._make_monitor_panel(), 3)
+        root.addWidget(self._make_monitor_panel(), 2)
 
         # 底部统计
         self.lb_stats = QLabel("TX A 0 | TX B 0 | RX A 0 | RX B 0 | 错误 A 0 | 错误 B 0")
@@ -548,13 +635,15 @@ class NewCanWindow(QDialog):
     def _make_bus_card(self, ch):
         w = QWidget()
         w.setObjectName('busCard')
+        w.setMinimumHeight(76)
         lay = QHBoxLayout(w)
-        lay.setContentsMargins(14, 10, 14, 10)
+        lay.setContentsMargins(16, 12, 16, 12)
+        lay.setSpacing(12)
 
-        blk = QLabel(ch)
-        blk.setFixedSize(38, 38)
+        blk = QLabel("CAN %s" % ch)
+        blk.setFixedSize(72, 38)
         blk.setAlignment(Qt.AlignCenter)
-        blk.setStyleSheet("font-weight:800; color:#fff; font-size:15px; border-radius:10px; background:%s;" %
+        blk.setStyleSheet("font-weight:800; color:#fff; font-size:13px; border-radius:10px; background:%s;" %
                           ("#2f6fed" if ch == CHAN_A else "#8b5cf6"))
         lay.addWidget(blk)
 
@@ -563,17 +652,17 @@ class NewCanWindow(QDialog):
         h = QHBoxLayout()
         name = QLabel("通道 %s" % ch)
         name.setObjectName('busName')
-        self.st_lbl = QLabel("○ 已关闭")
+        self.st_lbl = QLabel("未连接")
         self.st_lbl.setObjectName('busSt')
         h.addWidget(name)
         h.addWidget(self.st_lbl)
         col.addLayout(h)
-        stat = QLabel("波特率 500K  TX 0  RX 0  ERR 0")
+        stat = QLabel("500K  ·  TX 0  ·  RX 0  ·  ERR 0")
         stat.setObjectName('muted')
         col.addWidget(stat)
         lay.addLayout(col, 1)
 
-        btn = QPushButton("打开设备")
+        btn = QPushButton("打开总线")
         btn.setObjectName('small')
         btn.clicked.connect(lambda _=False, c=ch: self._toggle_bus(c))
         lay.addWidget(btn)
@@ -640,7 +729,7 @@ class NewCanWindow(QDialog):
         t = QLabel("收发监视流")
         t.setObjectName('secTitle')
         head.addWidget(t)
-        tip = QLabel(" 每行一帧 · 最新在底部")
+        tip = QLabel("每行一帧 · 最新在底部 · TX 蓝 / RX 绿 / ERR 红")
         tip.setObjectName('muted')
         head.addWidget(tip)
         head.addStretch(1)
@@ -648,8 +737,12 @@ class NewCanWindow(QDialog):
         self.mon = QPlainTextEdit()
         self.mon.setReadOnly(True)
         self.mon.setMaximumBlockCount(3000)
+        self.mon.setPlaceholderText("等待收发数据...")
+        self.mon.setLineWrapMode(QPlainTextEdit.NoWrap)
+        self.mon.setFont(_ui_font(9, fixed=True))
+        self._monitor_highlighter = _MonitorHighlighter(self.mon.document(), self._dark)
         self.mon.setStyleSheet(
-            "font-family:'Cascadia Code','Consolas',monospace; font-size:11px;" +
+            "font-size:11px;" +
             ("color:#1d2633; background:#fff; border:1px solid #e2e8f2; border-radius:8px;"
              if not self._dark else
              "color:#e8edf5; background:#161c26; border:1px solid #263141; border-radius:8px;"))
@@ -736,8 +829,8 @@ class NewCanWindow(QDialog):
 
     def _bus_set_state(self, ch, open_):
         btn, st = (self.busA_btn, self.busA_st) if ch == CHAN_A else (self.busB_btn, self.busB_st)
-        btn.setText("关闭设备" if open_ else "打开设备")
-        st.setText("● 已开启" if open_ else "○ 已关闭")
+        btn.setText("关闭总线" if open_ else "打开总线")
+        st.setText("已连接" if open_ else "未连接")
         st.setStyleSheet("color:#0e9f6e; font-weight:600;" if open_ else "color:#7c8798; font-weight:600;")
 
     def _bus_error(self, ch, msg):
@@ -1140,7 +1233,7 @@ class NewCanWindow(QDialog):
                 self._err_cnt['A'], self._err_cnt['B']))
         # 更新顶部总线卡片计数
         for ch, st in ((CHAN_A, self.busA_stat), (CHAN_B, self.busB_stat)):
-            st.setText("波特率 500K   TX %d   RX %d   ERR %d" % (
+            st.setText("500K  ·  TX %d  ·  RX %d  ·  ERR %d" % (
                 self._tx_cnt[ch], self._rx_cnt[ch], self._err_cnt[ch]))
 
     def _on_ui_tick(self):
@@ -1166,10 +1259,12 @@ class NewCanWindow(QDialog):
     def _apply_theme(self):
         self.setStyleSheet(DARK_QSS if self._dark else LIGHT_QSS)
         self.mon.setStyleSheet(
-            "font-family:'Cascadia Code','Consolas',monospace; font-size:11px;" +
-            ("color:#1d2633; background:#fff; border:1px solid #e2e8f2; border-radius:8px;"
+            "font-size:11px; padding:8px;" +
+            ("color:#1d2633; background:#f8faff; border:1px solid #d9e3ef; border-radius:10px;"
              if not self._dark else
-             "color:#e8edf5; background:#161c26; border:1px solid #263141; border-radius:8px;"))
+             "color:#e8edf5; background:#141b26; border:1px solid #2b3748; border-radius:10px;"))
+        self._monitor_highlighter.dark = self._dark
+        self._monitor_highlighter.rehighlight()
         self._rebuild_lists()
 
     # =========================================================
