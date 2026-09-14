@@ -1,0 +1,4 @@
+# 数据与规格文件按二进制处理：禁止换行符转换，保证跨机器字节一致（md5 可校验）
+# 本仓库 core.autocrlf=true，若不声明，CSV 会在检出时被改成 CRLF，md5 随之变化。
+ycyk_analyzer/spec/**  -text
+tests/fixtures/**      -text

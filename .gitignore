@@ -57,6 +57,9 @@ readflash*.bin
 *.xls
 *.xlsm
 !Can_Frame_Deal/Can.xlsx
+# ycyk_analyzer：解析表（规格）与回归黄金标准必须入库，否则代码无法离线复现
+!ycyk_analyzer/spec/*.xlsx
+!tests/fixtures/**/*.xlsx
 
 # Local databases
 *.sqlite
