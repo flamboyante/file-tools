@@ -36,6 +36,12 @@ try:                                    # Windows 控制台默认 GBK，转 UTF-
 except Exception:
     pass
 
+# 绿色分发包里代码放在 app\ 子目录下：嵌入式 Python 有 ._pth 文件时会隔离 sys.path，
+# 这里显式把本文件所在目录加进去，保证同目录的 spec / batch / report 能导入。
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+
 from spec import default_spec_path, spec_fingerprint, spec_search_dirs  # noqa: E402
 
 LOG_NAME = "ycyk_run.log"
@@ -180,6 +186,29 @@ def show_spec_info(spec_path: str) -> int:
     return 0 if exists else 1
 
 
+def _is_interactive() -> bool:
+    """是不是在真控制台里跑（双击 bat 的场景）—— 管道 / 重定向时不要抢输入。"""
+    try:
+        return sys.stdin is not None and sys.stdin.isatty()
+    except Exception:
+        return False
+
+
+def _ask_for_input() -> List[str]:
+    """没带参数时问一句要分析哪里 —— 双击 `启动.bat` 的人就靠这一步。"""
+    print("没给数据路径。两种做法都行：")
+    print()
+    print("  1) 把数据文件夹（或 CSV 文件）拖到「启动.bat」图标上，再松手")
+    print("  2) 在下面粘贴或输入路径，回车确认")
+    print()
+    try:
+        raw = input("数据路径: ").strip().strip('"').strip("'")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return []
+    return [raw] if raw else []
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
 
@@ -189,9 +218,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         return show_spec_info(spec_path)
 
     if not args.inputs:
-        print("没给数据路径。用 --help 看用法，例如：")
-        print("  ycyk D:\\数据\\0914")
-        return 1
+        if _is_interactive():
+            args.inputs = _ask_for_input()
+        if not args.inputs:
+            print("没给数据路径。用 --help 看用法，例如：")
+            print("  ycyk D:\\数据\\0914")
+            return 1
 
     # ---- 输入校验：目录（批量）还是 CSV（单组）----
     paths = [os.path.abspath(p) for p in args.inputs]

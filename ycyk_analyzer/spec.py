@@ -150,9 +150,11 @@ SPEC_ENV_VAR = "YCYK_SPEC"     # 设了就优先用它；现场换表 / 新旧�
 def spec_search_dirs() -> List[str]:
     """解析表的搜索目录，按优先级排列。
 
-    1. **程序目录** —— 打包后指 exe 所在目录。表放这儿就 **改完即生效、不用重新打包**；
-       PyInstaller 单文件模式会把内容解到 `sys._MEIPASS`，也在本项里兜底
-    2. **本模块目录** —— 开发态就是这里（`ycyk_analyzer/spec/`）
+    1. **程序目录** —— PyInstaller 打包后指 exe 所在目录。表放这儿就
+       **改完即生效、不用重新打包**；单文件模式的内容会解到 `sys._MEIPASS`，也在本项兜底
+    2. **本模块目录的上一级** —— 绿色分发包容器的根目录（代码在 `app\\` 下、表放根目录的 `spec\\`），
+       这是现场人员最容易找到并修改的位置
+    3. **本模块目录** —— 开发态就是这里（`ycyk_analyzer\\spec\\`），或随包打进去的兜底副本
     """
     dirs: List[str] = []
     if getattr(sys, "frozen", False):
@@ -160,7 +162,9 @@ def spec_search_dirs() -> List[str]:
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
             dirs.append(meipass)
-    dirs.append(os.path.dirname(os.path.abspath(__file__)))
+    here = os.path.dirname(os.path.abspath(__file__))
+    dirs.append(os.path.dirname(here))       # 绿色包根目录
+    dirs.append(here)                        # 开发态 / 兜底
 
     seen, out = set(), []                    # 去重但保持顺序
     for path in dirs:
