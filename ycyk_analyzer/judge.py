@@ -102,15 +102,21 @@ NEG_HINTS = ("不正常", "异常", "失败", "故障", "过高", "过低", "错
 
 
 def to_number(text: str) -> Optional[float]:
-    """把「0x7FFFFF / 0b101 / FF / 3 / 1.5」这类写法统一转成数字；转不了返回 None。"""
+    """把「0x7FFFFF / 0b101 / FF / 3 / 1.5」这类写法统一转成数字；转不了返回 None。
+
+    ★ 特别注意「0b」「1b」「0001b」这类**以 b 结尾的二进制标记**（表里大量这么写）：
+      必须按二进制解析。早先漏了这条，"0b" 会落到十六进制分支被解析成 **11**，
+      于是「正常」被判成异常 —— FLASH过流检测/刷新芯片那几条就是这么误报的。
+    """
     t = str(text).strip().lower()
     if not t:
         return None
+    # 以 b 结尾、且前面只由 0/1 组成 → 二进制（0b / 1b / 0001b）
+    if t.endswith("b") and t[:-1] and set(t[:-1]) <= {"0", "1"}:
+        return float(int(t[:-1], 2))
     try:
         if t.startswith("0x"):
             return float(int(t, 16))
-        if t.startswith("0b"):
-            return float(int(t, 2))
         return float(t)
     except ValueError:
         pass

@@ -52,9 +52,11 @@ NA = "暂不判据"
 FILL_OK = PatternFill("solid", fgColor="EAF3DE")      # 绿
 FILL_ALARM = PatternFill("solid", fgColor="FAEEDA")   # 橙（告警）
 FILL_ERR = PatternFill("solid", fgColor="FCEBEB")     # 红（异常）
+FILL_NA = PatternFill("solid", fgColor="F1EFE8")      # 浅灰（没判据 / 没判定）
 FONT_OK = Font(color="27500A", size=10)
 FONT_ALARM = Font(color="854F0B", size=10)
 FONT_ERR = Font(color="A32D2D", bold=True, size=10)
+FONT_NA = Font(color="888780", size=10)
 FONT_HEAD = Font(bold=True, size=10)
 ALIGN_WRAP = Alignment(vertical="top", wrap_text=True)
 
@@ -328,6 +330,10 @@ def write_sheet(workbook, sheet: SheetData) -> None:
             elif verdict == OK:
                 cell.fill = FILL_OK
                 cell.font = FONT_OK
+            elif verdict == NA:
+                # 没判据 / 没判定 → 浅灰（小K 要求：跟"有判据且通过"的绿区分开）
+                cell.fill = FILL_NA
+                cell.font = FONT_NA
 
     for c_idx, head in enumerate(sheet.headers, start=1):
         widest = len(str(head))
