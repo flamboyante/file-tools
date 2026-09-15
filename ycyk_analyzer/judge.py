@@ -102,28 +102,63 @@ NEG_HINTS = ("不正常", "异常", "失败", "故障", "过高", "过低", "错
 
 
 def to_number(text: str) -> Optional[float]:
-    """把「0x7FFFFF / 0b101 / FF / 3 / 1.5」这类写法统一转成数字；转不了返回 None。
+    """把各种进制写法统一转成数字；转不了返回 None。**两种风格都认**：
 
-    ★ 特别注意「0b」「1b」「0001b」这类**以 b 结尾的二进制标记**（表里大量这么写）：
-      必须按二进制解析。早先漏了这条，"0b" 会落到十六进制分支被解析成 **11**，
-      于是「正常」被判成异常 —— FLASH过流检测/刷新芯片那几条就是这么误报的。
+        十进制    31、85、0、1、1.5        （裸写，默认就是十进制）
+        C 风格    0x7FFFFF、0b1010        （前缀）
+        汇编风格  7FFFFFH、1010B、31D      （后缀 H=十六进制 / B=二进制 / D=十进制）
+
+    ★ 几个踩过坑的点，都要照顾到：
+      · 「0b」「1b」这种**只有标记没有数字**的写法（表里大量出现）→ 按二进制 0 / 1
+        （早先会落到十六进制分支，把 "0b" 解析成 11，导致「正常」被判成异常）
+      · 裸写的 `31` 一律按**十进制**（不是十六进制）—— 十进制是默认
+      · 纯十六进制字符（FF）才按十六进制兜底
     """
     t = str(text).strip().lower()
     if not t:
         return None
-    # 以 b 结尾、且前面只由 0/1 组成 → 二进制（0b / 1b / 0001b）
-    if t.endswith("b") and t[:-1] and set(t[:-1]) <= {"0", "1"}:
-        return float(int(t[:-1], 2))
+
+    # ① 快路径：裸写的十进制/浮点（最常见）
     try:
-        if t.startswith("0x"):
-            return float(int(t, 16))
         return float(t)
     except ValueError:
         pass
-    try:
-        return float(int(t, 16))   # 纯十六进制字符，如 FF
-    except ValueError:
-        return None
+
+    # ② C 风格前缀
+    if t.startswith("0x"):
+        try:
+            return float(int(t, 16))
+        except ValueError:
+            return None
+    if t.startswith("0b") and len(t) > 2:
+        try:
+            return float(int(t[2:], 2))
+        except ValueError:
+            pass
+
+    # ③ 汇编风格后缀 H / B / D
+    if len(t) >= 2 and t[-1] in ("h", "b", "d"):
+        body, kind = t[:-1], t[-1]
+        try:
+            if kind == "h":
+                return float(int(body, 16))
+            if kind == "b":
+                # 全 0/1 → 二进制；否则当十六进制兜底（避免 "1fb" 这类误读）
+                if body and set(body) <= {"0", "1"}:
+                    return float(int(body, 2))
+                return float(int(body, 16))
+            if kind == "d" and body.isdigit():
+                return float(int(body))
+        except ValueError:
+            pass
+
+    # ④ 纯十六进制字符（FF）才按十六进制兜底
+    if all(c in "0123456789abcdef" for c in t):
+        try:
+            return float(int(t, 16))
+        except ValueError:
+            return None
+    return None
 
 
 def meaning_to_raw(note: str, meaning: str) -> Optional[str]:
