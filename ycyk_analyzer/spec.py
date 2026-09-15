@@ -32,8 +32,10 @@ spec.py —— 把「标三-慢遥测试表」读成 Python 对象。
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
+import sys
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -141,19 +143,69 @@ def guess_role(name: str, is_header: bool) -> str:
     return ROLE_FIELD
 
 
-def default_spec_path() -> str:
-    """默认解析表路径 —— 指向**合并解析表**（本项目唯一依赖的 xlsx）。
+SPEC_FILE_NAME = "spec_merged_20260914.xlsx"
+SPEC_ENV_VAR = "YCYK_SPEC"     # 设了就优先用它；现场换表 / 新旧表对拍时用
 
-    合并表由 `tools/merge_spec_tables.py` 生成，内容 =
-        slot 定义（标三-慢遥测试表-20260512，最新权威版）
-      + T 段定义（PreCanDeal_T段_20260715 的标准快遥 / 标准慢遥51H/52H/53H）
 
-    第一页「说明」记录了来源文件 md5、搬迁后的校验结果，以及用这张表必须知道的
-    几件事（消息ID 的三种写法、length 含义、T 段判据在第 3 列等）。
-    源表仍保留在 spec/ 下，只用于对账，代码不再依赖它们。
+def spec_search_dirs() -> List[str]:
+    """解析表的搜索目录，按优先级排列。
+
+    1. **程序目录** —— 打包后指 exe 所在目录。表放这儿就 **改完即生效、不用重新打包**；
+       PyInstaller 单文件模式会把内容解到 `sys._MEIPASS`，也在本项里兜底
+    2. **本模块目录** —— 开发态就是这里（`ycyk_analyzer/spec/`）
     """
-    here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(here, "spec", "spec_merged_20260914.xlsx")
+    dirs: List[str] = []
+    if getattr(sys, "frozen", False):
+        dirs.append(os.path.dirname(os.path.abspath(sys.executable)))
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            dirs.append(meipass)
+    dirs.append(os.path.dirname(os.path.abspath(__file__)))
+
+    seen, out = set(), []                    # 去重但保持顺序
+    for path in dirs:
+        key = os.path.normcase(os.path.abspath(path))
+        if key not in seen:
+            seen.add(key)
+            out.append(path)
+    return out
+
+
+def default_spec_path() -> str:
+    """解析表路径 —— **外置优先**。
+
+    合并解析表是本项目唯一依赖的 xlsx（slot 定义 + T 段定义 + 判据列），
+    由 `tools/merge_spec_tables.py` 生成；第一页「说明」记着来源 md5 与用表须知。
+
+    查找顺序（第一个存在的即为结果）：
+      1. 环境变量 `YCYK_SPEC` 指定的文件 —— 明确指定时**不再回退**，找不到就报错，
+         免得"以为换了表、其实还在用旧的"
+      2. `程序目录/spec/spec_merged_*.xlsx` —— 打包分发时的**外置表**，
+         改一格判据不必重新打包
+      3. `本模块目录/spec/spec_merged_*.xlsx` —— 开发态，或随包打进去的兜底副本
+
+    都没有时返回最后一个候选，让 openpyxl 抛出并带上路径，便于排查。
+    """
+    override = os.environ.get(SPEC_ENV_VAR)
+    if override:
+        return os.path.abspath(override)
+
+    candidates = [os.path.join(d, "spec", SPEC_FILE_NAME) for d in spec_search_dirs()]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return candidates[-1]
+
+
+def spec_fingerprint(spec_path: Optional[str] = None) -> str:
+    """解析表的「文件名 + md5 前 12 位」—— 写进报告首页，追溯这份报告用的是哪版表。"""
+    path = spec_path or default_spec_path()
+    try:
+        with open(path, "rb") as fh:
+            digest = hashlib.md5(fh.read()).hexdigest()[:12]
+    except Exception:
+        return "{}（读取失败）".format(os.path.basename(path))
+    return "{}　md5:{}".format(os.path.basename(path), digest)
 
 
 # ---------------------------------------------------------------------------

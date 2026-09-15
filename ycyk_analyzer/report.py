@@ -2,17 +2,19 @@
 """
 report.py —— 出一份带判据着色的 xlsx（V1 阶段1：最简单最基础的判据）。
 
-**判据不在本文件里** —— 全部来自 `rules.csv`（见 `rules.py`）：
-    规则支持三种范围：**瞬时**（逐拍判，用于明细着色）／**总体**（跨拍统计后判）／**两者**。
-    → **加判据 = 在 rules.csv 里加一行，不用改代码。**
+**判据不在本文件里** —— 全部来自合并解析表的「判据」列（见 judge.py）：
+    → **加判据 = 在 Excel 里改一格，不用改代码。**
+    表的位置见 spec.py（外置优先，改了即生效）。
 
 输出结构（快遥 + 慢遥合成**一份**表）：
+    分析报告                          首页：人话结论 + 所用判据表指纹
     告警汇总-快遥 / 告警汇总-慢遥     按字段聚合，一行一个异常点
     告警明细-快遥 / 告警明细-慢遥     逐拍明细
     T段-快遥 / T段-慢遥                T 段原始值（每包一行）
     slot0 / slot3 / slot5             慢遥各通道的 BMU 字段
 
-用法：
+用法（**优先用 cli.py** —— 它会自动识别目录/文件，并把输出同时落日志）：
+    python cli.py <快遥csv> [<慢遥csv>]
     python report.py <csv>                       单个文件 → 同名 _判据.xlsx
     python report.py <快遥csv> <慢遥csv> <输出xlsx>   两路合成一份（顺序任意）
 """
@@ -37,6 +39,7 @@ from openpyxl.utils import get_column_letter  # noqa: E402
 
 from frame import SEQ_TO_SLOT, decode_frame, load_slots_by_seq  # noqa: E402
 from judge import load_judges, summarize  # noqa: E402
+from spec import default_spec_path, spec_fingerprint  # noqa: E402
 from t_segment import load_t_segments, pick_segment  # noqa: E402
 from table_csv import load_csv  # noqa: E402
 
@@ -64,7 +67,27 @@ ALIGN_WRAP = Alignment(vertical="top", wrap_text=True)
 # 判据：来自合并表的「判据」列（见 judge.py）—— 加判据 = 在 Excel 里改一格
 # ---------------------------------------------------------------------------
 
-JUDGES = load_judges()
+# **延迟加载**：import 本模块时不再读 xlsx —— 一是快，二是表缺失时不会连导入都失败，
+# 三是只有这样才能在运行时换表（见 use_spec）。
+_JUDGES = None
+
+
+def judges():
+    """取判据表（第一次真正用到时才读盘）。"""
+    global _JUDGES
+    if _JUDGES is None:
+        _JUDGES = load_judges()
+    return _JUDGES
+
+
+def use_spec(spec_path: Optional[str] = None) -> str:
+    """切换解析表 —— 判据表跟着重新加载，返回实际生效的表路径。
+
+    spec_path 为 None 时走 `spec.default_spec_path()`（外置优先）。
+    """
+    global _JUDGES
+    _JUDGES = load_judges(spec_path)
+    return spec_path or default_spec_path()
 
 
 def judge_field(source: str, name: str, value) -> str:
@@ -73,7 +96,7 @@ def judge_field(source: str, name: str, value) -> str:
     source = 数据块名（T段-快遥 / T段-慢遥 / slot0 / slot3 / slot5），
     judge.py 负责把它映射到合并表的对应 sheet。
     """
-    return JUDGES.judge(source, name, value)
+    return judges().judge(source, name, value)
 
 
 # ---------------------------------------------------------------------------
@@ -223,17 +246,21 @@ def analyze_one(csv_path: str, t_segments, spec_map) -> Dict:
 # ---------------------------------------------------------------------------
 
 
-def write_report_sheet(workbook, entries: List[Dict], index: int = 0) -> None:
+def write_report_sheet(workbook, entries: List[Dict], index: int = 0,
+                       spec_path: Optional[str] = None) -> None:
     """首页「分析报告」：人话结论 —— 数据来源、规模、发现的问题及其持续性。
 
     这一页是给"看结论的人"准备的：不需要理解 T 段/BMU/slot 这些概念，
     只要看这一页就知道"这批数据有没有问题、什么问题、多严重"。
+
+    也会记下**所用判据表的指纹** —— 判据改一格结论就变，报告得能追溯用的哪版表。
     """
     ws = workbook.create_sheet(title="分析报告", index=index)
 
     lines: List[List[str]] = []
     lines.append(["ycyk 遥测分析报告", ""])
     lines.append(["生成时间", datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+    lines.append(["判据表", spec_fingerprint(spec_path)])
     lines.append(["", ""])
 
     lines.append(["— 数据来源 —", ""])
@@ -427,10 +454,15 @@ def write_alarm_sheets(workbook, alarms: List[AlarmItem], kind: str, source_name
 # ---------------------------------------------------------------------------
 
 
-def build_report(csv_paths: List[str], out_path: Optional[str] = None) -> str:
-    """把 1~2 个 CSV（快遥 / 慢遥，顺序任意）解析成**一份** xlsx。"""
-    t_segments = load_t_segments()
-    spec_map = load_slots_by_seq()
+def build_report(csv_paths: List[str], out_path: Optional[str] = None,
+                 spec_path: Optional[str] = None) -> str:
+    """把 1~2 个 CSV（快遥 / 慢遥，顺序任意）解析成**一份** xlsx。
+
+    spec_path 指定解析表；None = 自动搜索（外置优先，见 spec.py）。
+    """
+    use_spec(spec_path)                       # 判据表跟着换
+    t_segments = load_t_segments(spec_path)
+    spec_map = load_slots_by_seq(spec_path)
 
     entries = [analyze_one(p, t_segments, spec_map) for p in csv_paths]
 
@@ -438,7 +470,7 @@ def build_report(csv_paths: List[str], out_path: Optional[str] = None) -> str:
     workbook.remove(workbook.active)
 
     # 首页：分析报告（人话结论）
-    write_report_sheet(workbook, entries, 0)
+    write_report_sheet(workbook, entries, 0, spec_path)
 
     # 告警页：快、慢各一对
     index = 1

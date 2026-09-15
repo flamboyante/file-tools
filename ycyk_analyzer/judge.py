@@ -25,7 +25,6 @@ judge.py —— 判据引擎：从合并表的「判据」列读规则，按标�
 
 from __future__ import annotations
 
-import os
 import re
 import zipfile
 from dataclasses import dataclass, field
@@ -33,6 +32,8 @@ from typing import Dict, List, Optional, Tuple
 from xml.etree import ElementTree as ET
 
 from openpyxl import load_workbook
+
+from spec import default_spec_path      # 解析表定位只有一处实现（见 spec.py）
 
 OK = "通过"
 WARN = "告警"
@@ -439,11 +440,6 @@ def _sheet_rows(path: str, sheet_name: str) -> List[List[str]]:
         return [list(r) for r in wb[sheet_name].iter_rows(values_only=True)]
     except Exception:
         return _rows_from_xml(path, sheet_name)
-
-
-def default_spec_path() -> str:
-    here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(here, "spec", "spec_merged_20260914.xlsx")
 
 
 def load_judges(spec_path: Optional[str] = None) -> JudgeTable:

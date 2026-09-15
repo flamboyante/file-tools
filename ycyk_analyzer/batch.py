@@ -50,7 +50,9 @@ from report import (
     FONT_ERR,
     FONT_HEAD,
     analyze_one,
+    use_spec,
 )
+from spec import spec_fingerprint
 from table_csv import load_csv
 from t_segment import load_t_segments
 
@@ -154,14 +156,19 @@ def process_one(path: str, kind: str, key: str, t_segments, spec_map,
 
 def run_batch(directory: str, out_path: Optional[str] = None,
               threshold: float = SKIP_PASS_RATE,
-              progress: Optional[Callable[[int, int, str], None]] = None) -> str:
-    """批量处理一个目录。progress(已完成组数, 总组数, 当前文件名) 供界面显示进度。"""
+              progress: Optional[Callable[[int, int, str], None]] = None,
+              spec_path: Optional[str] = None) -> str:
+    """批量处理一个目录。progress(已完成组数, 总组数, 当前文件名) 供界面显示进度。
+
+    spec_path 指定解析表；None = 自动搜索（外置优先，见 spec.py）。
+    """
     groups = scan_directory(directory)
     if not groups:
         raise ValueError("目录里没找到 快遥*.csv / 慢遥*.csv：" + directory)
 
-    t_segments = load_t_segments()
-    spec_map = load_slots_by_seq()
+    use_spec(spec_path)                       # 判据表跟着换
+    t_segments = load_t_segments(spec_path)
+    spec_map = load_slots_by_seq(spec_path)
 
     keys = sorted(groups)
     outcomes: List[FileOutcome] = []
@@ -187,7 +194,7 @@ def run_batch(directory: str, out_path: Optional[str] = None,
 
     workbook = Workbook()
     workbook.remove(workbook.active)
-    write_overview(workbook, outcomes, len(keys), os.path.basename(directory))
+    write_overview(workbook, outcomes, len(keys), os.path.basename(directory), spec_path)
     write_by_file(workbook, outcomes)
     write_details(workbook, outcomes)
     write_skipped(workbook, outcomes)
@@ -251,7 +258,8 @@ def _style_sheet(ws, widths: List[int], freeze: str = "A2") -> None:
         ws.column_dimensions[get_column_letter(idx)].width = width
 
 
-def write_overview(workbook, outcomes: List[FileOutcome], group_count: int, folder: str) -> None:
+def write_overview(workbook, outcomes: List[FileOutcome], group_count: int, folder: str,
+                   spec_path: Optional[str] = None) -> None:
     ws = workbook.create_sheet(title="批量总览", index=0)
     headers = ["字段", "判定", "涉及文件数", "总条数", "采集跨度", "首次", "末次"]
     ws.append(headers)
@@ -273,6 +281,8 @@ def write_overview(workbook, outcomes: List[FileOutcome], group_count: int, fold
     ws.cell(row=ws.max_row + 2, column=1,
             value="来源目录：{}　共 {} 组；「采集跨度」按涉及的文件数给（单次/跨 N 次/长期存在）".format(
                 folder, group_count)).font = Font(size=9, italic=True)
+    ws.cell(row=ws.max_row + 1, column=1,
+            value="判据表：{}".format(spec_fingerprint(spec_path))).font = Font(size=9, italic=True)
 
 
 def write_by_file(workbook, outcomes: List[FileOutcome]) -> None:
