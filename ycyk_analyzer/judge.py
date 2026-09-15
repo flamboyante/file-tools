@@ -258,7 +258,7 @@ class JudgeSpec:
         if self.kind == KIND_VALUE:
             return "正常值 = {}".format(" 或 ".join(self.values))
         if self.kind == KIND_RANGE:
-            return "正常范围 {~{}".format(self.low, self.high)
+            return "正常范围 {}~{}".format(self.low, self.high)
         if self.kind == KIND_TEXT:
             return "值含「{}」即判{}".format("、".join(self.values), self.level)
         if self.kind == KIND_STRUCT:

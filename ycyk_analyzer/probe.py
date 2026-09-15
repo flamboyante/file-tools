@@ -21,9 +21,6 @@ except Exception:
 
 from spec import (  # noqa: E402
     EXPECTED_TOTAL_BITS,
-    FieldSpec,
-    MessageSpec,
-    SlotSpec,
     default_spec_path,
     load_all_slots,
 )

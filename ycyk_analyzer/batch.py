@@ -29,15 +29,14 @@ except Exception:
     pass
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font
+from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
 
 from align import analyze_file as align_file
 from frame import load_slots_by_seq
-from judge import summarize
 from report import (
     ALARM,
     ALIGN_WRAP,

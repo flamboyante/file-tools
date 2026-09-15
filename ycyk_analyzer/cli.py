@@ -269,7 +269,9 @@ def run(argv: Optional[List[str]] = None) -> int:
     """包一层异常处理：现场双击运行时，至少能看清出了什么事。"""
     try:
         return main(argv)
-    except UserError as exc:
+    except (UserError, ValueError) as exc:
+        # ValueError 是数据格式问题（空 CSV / 目录里没匹配文件 / 列数不对等），
+        # 消息本身就是给人看的，不必甩 traceback
         print()
         print("[错误] {}".format(exc))
         return 1

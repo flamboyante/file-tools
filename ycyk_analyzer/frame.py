@@ -32,7 +32,6 @@ from bitfield import extract_bits, read_u16_be
 from spec import (
     ROLE_FIELD,
     ROLE_HEADER,
-    FieldSpec,
     MessageSpec,
     SlotSpec,
     load_all_slots,
