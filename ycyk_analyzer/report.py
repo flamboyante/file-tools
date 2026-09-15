@@ -35,7 +35,7 @@ from openpyxl.styles import Alignment, Font, PatternFill  # noqa: E402
 from openpyxl.utils import get_column_letter  # noqa: E402
 
 from frame import SEQ_TO_SLOT, decode_frame, load_slots_by_seq  # noqa: E402
-from rules import load_rules  # noqa: E402
+from judge import load_judges, summarize  # noqa: E402
 from t_segment import load_t_segments, pick_segment  # noqa: E402
 from table_csv import load_csv  # noqa: E402
 
@@ -44,26 +44,33 @@ from table_csv import load_csv  # noqa: E402
 # ---------------------------------------------------------------------------
 
 OK = "通过"
-ALARM = "告警"
+ALARM = "告警"      # 次级：需要关注
+ERR = "异常"        # 严重：必须处理
 NA = "暂不判据"
 
-FILL_OK = PatternFill("solid", fgColor="EAF3DE")
-FILL_ALARM = PatternFill("solid", fgColor="FCEBEB")
+FILL_OK = PatternFill("solid", fgColor="EAF3DE")      # 绿
+FILL_ALARM = PatternFill("solid", fgColor="FAEEDA")   # 橙（告警）
+FILL_ERR = PatternFill("solid", fgColor="FCEBEB")     # 红（异常）
 FONT_OK = Font(color="27500A", size=10)
-FONT_ALARM = Font(color="A32D2D", bold=True, size=10)
+FONT_ALARM = Font(color="854F0B", size=10)
+FONT_ERR = Font(color="A32D2D", bold=True, size=10)
 FONT_HEAD = Font(bold=True, size=10)
 ALIGN_WRAP = Alignment(vertical="top", wrap_text=True)
 
 # ---------------------------------------------------------------------------
-# 判据：全部来自 rules.csv（见 rules.py）—— 加判据只需在 Excel 里加一行
+# 判据：来自合并表的「判据」列（见 judge.py）—— 加判据 = 在 Excel 里改一格
 # ---------------------------------------------------------------------------
 
-RULESET = load_rules()
+JUDGES = load_judges()
 
 
-def judge_field(name: str, value, note: str = "") -> str:
-    """瞬时判据（逐拍）。规则写在 rules.csv，代码里不硬编码。"""
-    return RULESET.judge(name, value, note)
+def judge_field(source: str, name: str, value) -> str:
+    """瞬时判据（逐拍）。
+
+    source = 数据块名（T段-快遥 / T段-慢遥 / slot0 / slot3 / slot5），
+    judge.py 负责把它映射到合并表的对应 sheet。
+    """
+    return JUDGES.judge(source, name, value)
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +120,7 @@ def build_t_sheet(csv_data, segment, title: str) -> SheetData:
         verdict_row = [""]
         for fld in values:
             data_row.append(fld.raw)
-            verdict_row.append(judge_field(fld.name, fld.raw, fld.note))
+            verdict_row.append(judge_field(sheet.title, fld.name, fld.raw))
         sheet.rows.append(data_row)
         sheet.verdicts.append(verdict_row)
     return sheet
@@ -151,7 +158,7 @@ def build_bmu_sheet(slot, frames) -> Optional[SheetData]:
                 verdict_row.append(NA)
             else:
                 row.append(got.value)
-                verdict_row.append(judge_field(spec_field.name, got.value, spec_field.note))
+                verdict_row.append(judge_field(sheet.title, spec_field.name, got.value))
         sheet.rows.append(row)
         sheet.verdicts.append(verdict_row)
     return sheet
@@ -162,7 +169,7 @@ def collect_alarms(sheet: SheetData) -> List[AlarmItem]:
     out: List[AlarmItem] = []
     for r_idx, verdict_row in enumerate(sheet.verdicts):
         for c_idx, verdict in enumerate(verdict_row):
-            if verdict == ALARM:
+            if verdict in (ALARM, ERR):
                 out.append(AlarmItem(
                     source=sheet.title,
                     row_no=r_idx + 1,
@@ -227,7 +234,10 @@ def write_sheet(workbook, sheet: SheetData) -> None:
             cell = ws.cell(row=r_idx, column=c_idx, value=value)
             cell.alignment = ALIGN_WRAP
             verdict = verdict_row[c_idx - 1] if c_idx - 1 < len(verdict_row) else ""
-            if verdict == ALARM:
+            if verdict == ERR:
+                cell.fill = FILL_ERR
+                cell.font = FONT_ERR
+            elif verdict == ALARM:
                 cell.fill = FILL_ALARM
                 cell.font = FONT_ALARM
             elif verdict == OK:
@@ -254,13 +264,14 @@ def write_alarm_sheets(workbook, alarms: List[AlarmItem], kind: str, source_name
         key = (item.source, item.field_name)
         if key not in agg:
             agg[key] = {"count": 0, "first": item.time, "last": item.time,
-                        "value": item.value, "note": item.note, "total": item.total_rows}
+                        "value": item.value, "note": item.note,
+                        "total": item.total_rows, "verdict": item.verdict}
             order.append(key)
         agg[key]["count"] = int(agg[key]["count"]) + 1
         agg[key]["last"] = item.time
 
     ws = workbook.create_sheet(title="告警汇总-{}".format(kind), index=index)
-    headers = ["数据块", "字段", "异常拍数", "总拍数", "总体结论", "首次时间", "末次时间", "值", "判据说明"]
+    headers = ["数据块", "字段", "判定", "命中拍数", "总拍数", "总体结论", "首次时间", "末次时间", "值", "判据说明"]
     ws.append(headers)
     for idx in range(1, len(headers) + 1):
         ws.cell(row=1, column=idx).font = FONT_HEAD
@@ -271,22 +282,29 @@ def write_alarm_sheets(workbook, alarms: List[AlarmItem], kind: str, source_name
         entry = agg[key]
         count = int(entry["count"])
         total = int(entry["total"])
-        # ★ 总体结论：交给 rules.csv 里「判据范围 = 总体 / 两者」的规则
-        summary = RULESET.summarize(key[1], total, count) or ""
-        values = [key[0], key[1], count, total, summary,
+        verdict = str(entry["verdict"])
+        # ★ 总体结论（跨拍）：通用口径 —— 看命中拍数占整段的比例
+        summary = summarize(count, total)
+        values = [key[0], key[1], verdict, count, total, summary,
                   entry["first"], entry["last"], entry["value"], _flat(str(entry["note"]))]
         for c_idx, value in enumerate(values, start=1):
             cell = ws.cell(row=r_idx, column=c_idx, value=value)
             cell.alignment = ALIGN_WRAP
             if c_idx == 2:
-                cell.fill = FILL_ALARM
-                cell.font = FONT_ALARM
-            elif c_idx == 5 and summary:
-                cell.font = FONT_ALARM
-    for c_idx, width in enumerate([10, 30, 10, 8, 12, 22, 22, 12, 46], start=1):
+                cell.font = Font(bold=True, size=10)
+            elif c_idx == 3:
+                if verdict == ERR:
+                    cell.fill = FILL_ERR
+                    cell.font = FONT_ERR
+                elif verdict == ALARM:
+                    cell.fill = FILL_ALARM
+                    cell.font = FONT_ALARM
+            elif c_idx == 6 and summary:
+                cell.font = FONT_ERR if ("持续" in summary or "全程" in summary) else FONT_ALARM
+    for c_idx, width in enumerate([10, 30, 8, 10, 8, 12, 22, 22, 12, 44], start=1):
         ws.column_dimensions[get_column_letter(c_idx)].width = width
     ws.cell(row=max(len(order) + 2, 4), column=1,
-            value="来源：{}　（同一字段只在汇总里占一行；「总体结论」来自 rules.csv 的总体规则）".format(
+            value="来源：{}　（同一字段只占一行；「总体结论」按命中拍数占比：全程 / 持续≥90% / 间歇 / 偶发≤5%）".format(
                 source_name)).font = Font(size=9, italic=True)
 
     ws2 = workbook.create_sheet(title="告警明细-{}".format(kind), index=index + 1)
@@ -303,8 +321,12 @@ def write_alarm_sheets(workbook, alarms: List[AlarmItem], kind: str, source_name
             cell = ws2.cell(row=r_idx, column=c_idx, value=value)
             cell.alignment = ALIGN_WRAP
             if c_idx == 6:
-                cell.fill = FILL_ALARM
-                cell.font = FONT_ALARM
+                if item.verdict == ERR:
+                    cell.fill = FILL_ERR
+                    cell.font = FONT_ERR
+                elif item.verdict == ALARM:
+                    cell.fill = FILL_ALARM
+                    cell.font = FONT_ALARM
     for c_idx, width in enumerate([10, 8, 22, 30, 18, 10, 50], start=1):
         ws2.column_dimensions[get_column_letter(c_idx)].width = width
 
