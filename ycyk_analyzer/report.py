@@ -28,6 +28,7 @@ except Exception:
     pass
 
 from dataclasses import dataclass, field  # noqa: E402
+from datetime import datetime  # noqa: E402
 from typing import Dict, List, Optional, Tuple  # noqa: E402
 
 from openpyxl import Workbook  # noqa: E402
@@ -220,6 +221,90 @@ def analyze_one(csv_path: str, t_segments, spec_map) -> Dict:
 # ---------------------------------------------------------------------------
 
 
+def write_report_sheet(workbook, entries: List[Dict], index: int = 0) -> None:
+    """首页「分析报告」：人话结论 —— 数据来源、规模、发现的问题及其持续性。
+
+    这一页是给"看结论的人"准备的：不需要理解 T 段/BMU/slot 这些概念，
+    只要看这一页就知道"这批数据有没有问题、什么问题、多严重"。
+    """
+    ws = workbook.create_sheet(title="分析报告", index=index)
+
+    lines: List[List[str]] = []
+    lines.append(["ycyk 遥测分析报告", ""])
+    lines.append(["生成时间", datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+    lines.append(["", ""])
+
+    lines.append(["— 数据来源 —", ""])
+    total_summary = []
+    for entry in entries:
+        rows = entry["data"].rows
+        first_time = rows[0].dm_time if rows else "（无数据）"
+        last_time = rows[-1].dm_time if rows else ""
+        lines.append([entry["kind"], os.path.basename(entry["path"])])
+        lines.append(["", "包数 {}　时间范围 {} ~ {}".format(len(rows), first_time, last_time)])
+        total_summary.append((entry, len(rows)))
+    lines.append(["", ""])
+
+    lines.append(["— 结论 —", ""])
+    any_alarm = False
+    for entry, n_rows in total_summary:
+        fields: Dict[str, Dict] = {}
+        for alarm in entry["alarms"]:
+            info = fields.setdefault(alarm.field_name, {
+                "count": 0, "total": alarm.total_rows or n_rows, "level": alarm.verdict,
+                "source": alarm.source, "value": alarm.value, "note": alarm.note,
+            })
+            info["count"] += 1
+
+        if not fields:
+            lines.append(["{}：未发现异常（{} 个包全部通过判据）".format(entry["kind"], n_rows)])
+            continue
+
+        any_alarm = True
+        lines.append(["{}：发现 {} 个字段异常".format(entry["kind"], len(fields))])
+        for name, info in sorted(fields.items(), key=lambda kv: -kv[1]["count"]):
+            ratio = info["count"] * 100.0 / info["total"] if info["total"] else 0.0
+            if ratio >= 99:
+                span = "全程异常（持续性）"
+            elif ratio >= 90:
+                span = "持续异常"
+            elif ratio <= 5:
+                span = "偶发（{} 拍）".format(info["count"])
+            else:
+                span = "间歇异常"
+            lines.append([
+                "",
+                "【{}】{}".format(info["level"], name),
+            ])
+            lines.append([
+                "",
+                "        异常 {}/{} 拍（{:.1f}%）· {} · 出现值「{}」".format(
+                    info["count"], info["total"], ratio, span, info["value"]),
+            ])
+    if not any_alarm:
+        lines.append(["", "两组数据均未发现异常。"])
+
+    lines.append(["", ""])
+    lines.append(["— 说明 —", ""])
+    lines.append(["", "判据来自解析表「判据」列（异常=严重，需处理；告警=次级，需关注）"])
+    lines.append(["", "「异常 x/y 拍」= 该字段在这批数据的 y 个采样包里，有 x 个被判为异常"])
+    lines.append(["", "※ BMU 字段（来自 slot0/3/5）的 y 是「该 slot 的包数」，不是全组的包数"])
+    lines.append(["", "其余页：告警汇总（按字段聚合）/ 告警明细（逐拍）/ T段数据 / BMU数据（slot）"])
+
+    for row_idx, row in enumerate(lines, start=1):
+        for col_idx, value in enumerate(row, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+
+    ws.cell(row=1, column=1).font = Font(bold=True, size=13)
+    for row_idx, row in enumerate(lines, start=1):
+        if row and str(row[0]).startswith("—"):
+            ws.cell(row=row_idx, column=1).font = Font(bold=True, size=11)
+
+    ws.column_dimensions["A"].width = 14
+    ws.column_dimensions["B"].width = 96
+
+
 def write_sheet(workbook, sheet: SheetData) -> None:
     ws = workbook.create_sheet(title=sheet.title)
     ws.append(sheet.headers)
@@ -346,8 +431,11 @@ def build_report(csv_paths: List[str], out_path: Optional[str] = None) -> str:
     workbook = Workbook()
     workbook.remove(workbook.active)
 
-    # 告警页放最前：快、慢各一对
-    index = 0
+    # 首页：分析报告（人话结论）
+    write_report_sheet(workbook, entries, 0)
+
+    # 告警页：快、慢各一对
+    index = 1
     for entry in entries:
         write_alarm_sheets(workbook, entry["alarms"], entry["kind"],
                            os.path.basename(entry["path"]), index)

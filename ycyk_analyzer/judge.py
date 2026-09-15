@@ -305,8 +305,11 @@ def _rows_from_xml(path: str, sheet_name: str) -> List[List[str]]:
                 break
         if target is None:
             return []
+        # rels 里的 Target 有两种写法：相对（worksheets/sheet1.xml）
+        # 或绝对（/xl/worksheets/sheet1.xml，腾讯文档这类工具会这么写）—— 两种都要兼容
+        target = target.lstrip("/")
         if not target.startswith("xl/"):
-            target = "xl/" + target.lstrip("/")
+            target = "xl/" + target
 
         root = ET.fromstring(z.read(target))
         cells: Dict[int, Dict[int, str]] = {}
