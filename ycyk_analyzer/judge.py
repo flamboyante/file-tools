@@ -73,6 +73,22 @@ JUDGE_COL = {
     "通道3（slot5）": 14,
 }
 
+# 各 sheet 的「备注/说明」列（判据没有提到的中文含义，要从这里反查原始值）
+NOTE_COL = {
+    "标准快遥": 3,
+    "标准慢遥51H": 3,
+    "标准慢遥52H": 3,
+    "标准慢遥53H": 3,
+    "通道0（slot0）": 13,
+    "通道1（slot2）": 13,
+    "通道2（slot3）": 13,
+    "通道3（slot5）": 13,
+}
+
+# 备注里的「值：含义」映射，例如「0：断开；1：建链状态」「0001b：常规业务模式」
+# ★ 含义部分不能含冒号 —— 否则「1：正常：0：异常」这种连贯写法会被贪婪匹配吞成一条
+RE_VALUE_MEANING = re.compile(r"([0-9A-Za-z]{1,8})\s*[:：]\s*([^;；/，,\n:：]+)")
+
 KIND_VALUE = "value"
 KIND_RANGE = "range"
 KIND_TEXT = "text"
@@ -104,6 +120,22 @@ def to_number(text: str) -> Optional[float]:
         return None
 
 
+def meaning_to_raw(note: str, meaning: str) -> Optional[str]:
+    """从备注的「值：含义」映射里，反查某个中文含义对应的**原始值**。
+
+    例：备注「0：断开；1：建链状态」，含义"断开" → 返回 "0"。
+    这是解决"值是中文而判据是位模式"的**可靠办法** —— 不用猜词，直接查表里的映射。
+    """
+    text = (meaning or "").strip()
+    if not text:
+        return None
+    for match in RE_VALUE_MEANING.finditer(note or ""):
+        candidate = match.group(2).strip()
+        if candidate and (candidate in text or text in candidate):
+            return match.group(1)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # 单条判据
 # ---------------------------------------------------------------------------
@@ -121,6 +153,7 @@ class JudgeSpec:
     high: Optional[float] = None
     frame_seq: Optional[int] = None
     summary_kind: str = ""
+    note: str = ""                                    # 表里的备注（用于反查中文含义的原始值）
 
     def evaluate(self, value) -> str:
         """瞬时判定：返回 通过 / 告警 / 异常 / 暂不判据。"""
@@ -130,10 +163,23 @@ class JudgeSpec:
             if not text:
                 return NA
             got = to_number(text)
-            # ★ 值不是数字时按中文语义判 —— 快遥 T 段的值是**解码后的中文**（"正常"/"异常"），
-            #   而判据那格写的是位模式（正常值:1）。两者视角不同，这里做适配：
-            #   含负面词 = 命中，含正面词 = 通过。
+            # ★ 值不是数字时（快遥 T 段的值是**解码后的中文**，而判据那格写的是位模式），
+            #   按下面三步判 —— 关键是第 ② 步「查备注映射」，**不靠猜词**：
             if got is None:
+                # ① 值直接等于正常值（判据本身写成中文，如 正常值:常规业务模式）
+                if any(text == v.strip() for v in self.values):
+                    return OK
+                # ② 从备注的「值：含义」映射反查这个中文含义的原始值，再与正常值比
+                #    例：值"断开" → 备注「0：断开；1：建链状态」→ 原始值 0 ≠ 正常值 1 → 命中
+                raw = meaning_to_raw(self.note, text)
+                if raw is not None:
+                    raw_num = to_number(raw)
+                    for want in self.values:
+                        want_num = to_number(want)
+                        if raw_num is not None and want_num is not None and abs(raw_num - want_num) < 1e-9:
+                            return OK
+                    return self.level
+                # ③ 实在查不到映射，才退到通用词表
                 if any(w in text for w in NEG_HINTS):
                     return self.level
                 if any(w in text for w in POS_HINTS):
@@ -182,11 +228,15 @@ class JudgeSpec:
         return "不判"
 
 
-def parse_judge(raw: str) -> JudgeSpec:
-    """把判据列的一格文字解析成 JudgeSpec。"""
+def parse_judge(raw: str, note: str = "") -> JudgeSpec:
+    """把判据列的一格文字解析成 JudgeSpec；note = 该字段在表里的备注（用来反查中文含义）。"""
     text = (raw or "").strip()
+
+    def make(kind: str, **kw) -> JudgeSpec:
+        return JudgeSpec(raw=raw or "", kind=kind, note=note, **kw)
+
     if not text:
-        return JudgeSpec(raw=raw or "", kind=KIND_NONE)
+        return make(KIND_NONE)
 
     # 先摘掉 ,级:X
     level = WARN
@@ -196,35 +246,34 @@ def parse_judge(raw: str) -> JudgeSpec:
         text = text[: match.start()].strip()
 
     if text.startswith("无需判据") or text.startswith("待定"):
-        return JudgeSpec(raw=raw or "", kind=KIND_NONE)
+        return make(KIND_NONE)
 
     if text.startswith("结构对应"):
         seq = re.search(r"帧序号\s*=\s*(\d)", text)
-        return JudgeSpec(raw=raw or "", kind=KIND_STRUCT,
-                         frame_seq=int(seq.group(1)) if seq else None)
+        return make(KIND_STRUCT, frame_seq=int(seq.group(1)) if seq else None)
 
     if text.startswith("总体:"):
-        return JudgeSpec(raw=raw or "", kind=KIND_SUMMARY, summary_kind=text)
+        return make(KIND_SUMMARY, summary_kind=text)
 
     if text.startswith("正常范围"):
         body = text.split(":", 1)[1] if ":" in text else ""
         parts = re.split(r"[~～]", body)
         if len(parts) == 2:
-            return JudgeSpec(raw=raw or "", kind=KIND_RANGE, level=level,
-                             low=to_number(parts[0]), high=to_number(parts[1]))
-        return JudgeSpec(raw=raw or "", kind=KIND_NONE)
+            return make(KIND_RANGE, level=level,
+                        low=to_number(parts[0]), high=to_number(parts[1]))
+        return make(KIND_NONE)
 
     if text.startswith("正常值"):
         body = text.split(":", 1)[1] if ":" in text else ""
         values = [v.strip() for v in body.split("|") if v.strip()]
-        return JudgeSpec(raw=raw or "", kind=KIND_VALUE, level=level, values=values)
+        return make(KIND_VALUE, level=level, values=values)
 
     if text.startswith("文本"):
         body = text.split(":", 1)[1] if ":" in text else ""
         values = [v.strip() for v in re.split(r"[|/、]", body) if v.strip()]
-        return JudgeSpec(raw=raw or "", kind=KIND_TEXT, level=level, values=values)
+        return make(KIND_TEXT, level=level, values=values)
 
-    return JudgeSpec(raw=raw or "", kind=KIND_NONE)
+    return make(KIND_NONE)
 
 
 # ---------------------------------------------------------------------------
@@ -366,13 +415,16 @@ def load_judges(spec_path: Optional[str] = None) -> JudgeTable:
         if judge_col is None:
             continue
         rows = _sheet_rows(path, sheet_name)
+        note_col = NOTE_COL.get(sheet_name)
         for row in rows[1:]:
             if len(row) < max(name_col, judge_col):
                 continue
             name = str(row[name_col - 1] or "").strip()
             raw = str(row[judge_col - 1] or "").strip()
+            note = (str(row[note_col - 1] or "").strip()
+                    if note_col and len(row) >= note_col else "")
             if not name or not raw:
                 continue
-            table[(sheet_name, name)] = parse_judge(raw)
+            table[(sheet_name, name)] = parse_judge(raw, note)
 
     return JudgeTable(table)
