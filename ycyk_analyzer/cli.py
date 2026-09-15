@@ -1,25 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-cli.py —— ycyk 遥测分析工具的**唯一入口**。
+cli.py —— 遥测分析的统一入口：自动识别输入是目录（批量）还是 CSV（单组）。
 
-用法:
-    python cli.py <数据目录>              批量：解析目录下所有 快遥/慢遥 CSV，出一份总览
-    python cli.py <csv> [<csv2>]          单组：解析 1~2 个 CSV，出一份报告
-    python cli.py --spec-info             只显示当前用的是哪个解析表（含指纹），不解析数据
-
-选项:
-    -o, --out <文件>     输出 xlsx（默认自动命名，放在数据旁边）
-    --spec <文件>        指定解析表（默认自动搜索，**外置优先** —— 见 spec.py）
-    --log <文件>         日志文件（默认放在输出旁边，叫 ycyk_run.log）
-
-退出码:
-    0 成功 / 1 用法或数据有问题 / 2 意外异常
-
-设计要点（都是给"现场没人能帮你调试"这件事准备的）:
-  * 输出目录不可写（只读 U 盘、网络共享）时**自动回退**到程序目录，不让人卡在一半
-  * 所有控制台输出**同时落日志** —— 出了事有据可查
-  * 打包成绿色包后，把 `spec/` 放在 exe 旁边就能改判据，不必重新打包
-  * 出错给一句人话提示 + 非零退出码，避免双击时"一闪而过什么都没看到"
+用法、选项见 `--help`。退出码：0 成功 / 1 用法或数据有问题 / 2 意外异常。
 """
 
 from __future__ import annotations
@@ -30,7 +13,7 @@ import sys
 import traceback
 from typing import List, Optional
 
-try:                                    # Windows 控制台默认 GBK，转 UTF-8 免得中文乱码
+try:                                    # Windows 控制台默认 GBK，转 UTF-8
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 except Exception:
@@ -140,7 +123,7 @@ def ensure_writable(out_path: str, fallback_dir: str) -> str:
 
 
 def _progress(done: int, total: int, name: str) -> None:
-    """批量进度回调：每 5 组 + 最后一组打一行，免得现场以为程序卡死了。"""
+    """批量进度回调：每 5 组 + 最后一组打一行。"""
     if done == total or done % 5 == 0:
         print("  [{}/{}] {}".format(done, total, name))
 

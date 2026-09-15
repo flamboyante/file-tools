@@ -1,22 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-report.py —— 出一份带判据着色的 xlsx（V1 阶段1：最简单最基础的判据）。
+report.py —— 出一份带判据着色的 xlsx（单组：快遥 + 慢遥合成一份）。
 
-**判据不在本文件里** —— 全部来自合并解析表的「判据」列（见 judge.py）：
-    → **加判据 = 在 Excel 里改一格，不用改代码。**
-    表的位置见 spec.py（外置优先，改了即生效）。
+判据不在本文件里，全部来自合并解析表的「判据」列（见 judge.py）；
+表的位置见 spec.py（外置优先）。
 
-输出结构（快遥 + 慢遥合成**一份**表）：
-    分析报告                          首页：人话结论 + 所用判据表指纹
+输出结构：
+    分析报告                          首页：结论 + 所用判据表指纹
     告警汇总-快遥 / 告警汇总-慢遥     按字段聚合，一行一个异常点
     告警明细-快遥 / 告警明细-慢遥     逐拍明细
     T段-快遥 / T段-慢遥                T 段原始值（每包一行）
     slot0 / slot3 / slot5             慢遥各通道的 BMU 字段
 
-用法（**优先用 cli.py** —— 它会自动识别目录/文件，并把输出同时落日志）：
-    python cli.py <快遥csv> [<慢遥csv>]
-    python report.py <csv>                       单个文件 → 同名 _判据.xlsx
-    python report.py <快遥csv> <慢遥csv> <输出xlsx>   两路合成一份（顺序任意）
+用法：python report.py <快遥csv> [<慢遥csv>] [输出xlsx]；日常调用走 cli.py。
 """
 
 from __future__ import annotations
@@ -358,7 +354,7 @@ def write_sheet(workbook, sheet: SheetData) -> None:
                 cell.fill = FILL_OK
                 cell.font = FONT_OK
             elif verdict == NA:
-                # 没判据 / 没判定 → 浅灰（小K 要求：跟"有判据且通过"的绿区分开）
+                # 没判据 / 没判定 → 浅灰（与"有判据且通过"的绿区分开）
                 cell.fill = FILL_NA
                 cell.font = FONT_NA
 
@@ -401,7 +397,7 @@ def write_alarm_sheets(workbook, alarms: List[AlarmItem], kind: str, source_name
         count = int(entry["count"])
         total = int(entry["total"])
         verdict = str(entry["verdict"])
-        # ★ 总体结论（跨拍）：通用口径 —— 看命中拍数占整段的比例
+        # 总体结论（跨拍）：看命中拍数占整段的比例
         summary = summarize(count, total)
         values = [key[0], key[1], verdict, count, total, summary,
                   entry["first"], entry["last"], entry["value"], _flat(str(entry["note"]))]

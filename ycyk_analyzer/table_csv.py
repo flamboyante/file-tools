@@ -2,17 +2,15 @@
 """
 table_csv.py —— 读遥测 CSV，按列名把内容分成三段：T 段 / Z 段 / 元数据。
 
-CSV 的真实结构（实测自 `慢遥1-*.csv`，共 271 列）：
+CSV 结构（271 列，以 `慢遥1-*.csv` 为准）：
 
     列 0-1     DMTime, SatTime               时间
-    列 2-112   TMXZJDT2001 .. TMXZJDT2111    111 列 = T 段（已经是解码好的中文枚举或数值）
+    列 2-112   TMXZJDT2001 .. TMXZJDT2111    111 列 = T 段（已是解码好的中文枚举或数值）
     列 113-260 TMXZJDZ2001 .. TMXZJDZ2148    148 列 = Z 段（每列一个字节，取值 0~255）
     列 261-270 apid/backFlag/.../ver         10 列元数据
 
-★ 关键：**Z 段一列 = 包里一个字节**。
-   TMXZJDZ2001 → 包里偏移 0
-   TMXZJDZ2148 → 包里偏移 147（就是帧序号那一字节）
-   所以把 148 列按顺序取出来拼成 list[int]，就是一个完整的 slot 包。
+Z 段一列 = 包里一个字节：TMXZJDZ2001 → 偏移 0，TMXZJDZ2148 → 偏移 147（帧序号）。
+按顺序取 148 列拼成 list[int]，即一个完整的 slot 包。
 """
 
 from __future__ import annotations
@@ -79,8 +77,8 @@ class TelemetryCsv:
 def load_csv(path: str) -> TelemetryCsv:
     """读一个遥测 CSV。
 
-    ★ encoding 必须显式写 "utf-8"：Windows 默认按 GBK 解码，这份文件是 UTF-8 无 BOM，
-      不写就用系统默认值 → 中文列名会变乱码。
+    encoding 必须显式写 "utf-8"：文件是 UTF-8 无 BOM，用系统默认（Windows 为 GBK）
+    解码会使中文列名乱码。
     """
     with open(path, "r", encoding="utf-8", newline="") as fh:
         raw = list(csv.reader(fh))

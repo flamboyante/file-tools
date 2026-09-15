@@ -2,18 +2,10 @@
 """
 align.py —— 对齐报告：把 CSV 里每个包解一遍，统计"自证通过率"。
 
-这是"不依赖外部工具"的落点：
-    不再拿外部工具产物逐格比对，而是每个包自己证明自己对（见 frame.py 的自证逻辑）。
-    通过率 100% = 消息定位、表定义、位序解码三者全部一致。
+不依赖外部工具：不拿外部产物逐格比对，而是每个包自己证明自己对（见 frame.py）。
+通过率 100% = 消息定位、表定义、位序解码三者一致。
 
-用法：
-    python align.py <csv文件或目录> [...]            跑对齐，出汇总报告
-    python align.py --dump <csv文件> <行号>          把某一行解出来的字段值全列出来
-
-例：
-    python align.py ../../tests/fixtures/ycyk_0914/基带慢摇1.csv
-    python align.py "V:/MY/PYQT/_extract"
-    python align.py --dump ../../tests/fixtures/ycyk_0914/基带慢摇1.csv 1
+用法：python align.py <csv或目录> [...]；加 --dump <csv> <行号> 列出某行的全部字段值。
 """
 
 from __future__ import annotations

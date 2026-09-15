@@ -2,21 +2,19 @@
 """
 batch.py —— 批量解析一个目录：自动配对快遥/慢遥，逐组解析 + 判据，出一份跨文件总览。
 
-用法：
-    python batch.py <数据目录> [输出xlsx]
+输出一个 xlsx（4 页）：
+    批量总览        按「字段」聚合 —— 该异常是长期存在还是偶发
+    按文件          每对文件一行（包数 / 自证通过 / 告警 / 异常 / 状态）
+    全部告警明细     逐条，带来源文件与日期
+    跳过清单        源文件本身有问题的 —— 不解析、记下原因，不拖累整体
 
-输出（一个 xlsx，4 页）：
-    批量总览       ★ 核心：按「字段」聚合 —— 回答"这个异常是长期存在还是偶发"
-    按文件         每对文件一行（包数 / 自证通过 / 告警 / 异常 / 状态）
-    全部告警明细    逐条，带来源文件与日期
-    跳过清单       源文件本身有问题的 —— **不解析、记下原因**，不拖累整体
+源文件容错：CSV 读不了 / Z 段列数不对 / 慢遥自证通过率低于 SKIP_PASS_RATE（90%）→
+跳过该文件并记入跳过清单。
 
-★ 源文件容错（小K 要求）：
-    CSV 读不了 / Z 段列数不对 / 慢遥自证通过率过低 → **直接跳过**该文件，记入跳过清单。
-    判定阈值 SKIP_PASS_RATE = 90%（正常文件实测都是 100%，低于它就说明源文件格式不对）。
-
-配对规则：文件名去掉前缀后的尾部 "0914-00" 作为配对键
+配对规则：文件名尾部 "0914-00" 作为配对键
     `快遥-0914-00.csv` ↔ `慢遥1-0914-00.csv` → 键 0914-00
+
+用法：python batch.py <数据目录> [输出xlsx]
 """
 
 from __future__ import annotations
@@ -135,7 +133,7 @@ def process_one(path: str, kind: str, key: str, t_segments, spec_map,
         if not data.is_slot_data:
             outcome.skipped = "Z 段列数不是 148（实际 {}）—— 源文件结构不对".format(len(data.z_columns))
             return outcome
-        # 自证通过率：正常文件实测 100%，低于阈值说明源文件格式异常
+        # 自证通过率：正常文件为 100%，低于阈值说明源文件格式异常
         align = align_file(path, spec_map)
         outcome.passed_frames = align.passed
         if align.total and (align.passed / float(align.total)) < threshold:

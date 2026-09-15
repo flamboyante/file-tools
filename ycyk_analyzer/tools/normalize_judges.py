@@ -68,13 +68,13 @@ def normalize(raw: str, note: str) -> str:
         inner = re.sub(r"\s+", "", tail.group(1)) if tail else ""
         return "待定" + ("({})".format(inner) if inner else "")
 
-    # ---- 新增类型：跨拍判据（小K 09-15 补充）----
+    # ---- 跨拍判据 ----
     if "每次都有变化" in text:
         return "总体:有变化"                 # 值应随拍变化，不变=异常（如时间码/请求计数）
     if "历史记录" in text or "历史" in text:
         return "总体:按历史基线"              # 以历史常见值为基线，偏离=异常（CPU/SOC 状态类）
 
-    # ---- 「按这个先来」：以 0914 实测范围作初始阈值（小K 授权）----
+    # ---- 「按这个先来」：以实测范围作初始阈值 ----
     m = re.search(r"按这个先来.*?实测\s*([\d.]+)\s*~\s*([\d.]+)", text)
     if m:
         return "正常范围:{}~{}".format(m.group(1), m.group(2))
