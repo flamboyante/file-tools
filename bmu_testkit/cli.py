@@ -166,6 +166,52 @@ def cmd_file_transfer(args):
     return 0 if r.ok else 1
 
 
+def cmd_can(args):
+    """CAN 通路收发（L1：任意 ID + 任意数据，不含指令语义）。"""
+    from JiangCan_Tools.ECAN import BaudRate      # 延迟导入，避免启动即依赖 CAN 库
+    from .transport import CanMedia
+
+    ch = 0 if args.channel.upper() == "A" else 1
+    baud = getattr(BaudRate, f"BAUD_{args.baud.upper()}", BaudRate.BAUD_500K)
+    m = CanMedia(channel=ch, baud=baud, default_id=args.id,
+                 dll_path=args.dll, name=f"CAN-{args.channel.upper()}")
+    try:
+        m.open()
+    except Exception as e:
+        print(f"CAN 打开失败: {e}", file=sys.stderr)
+        return 1
+
+    try:
+        print(f"[{m.describe()}]")
+        if args.data:
+            try:
+                data = bytes.fromhex(args.data.replace(" ", "").replace("-", ""))
+            except ValueError as e:
+                print(f"hex 解析失败: {e}", file=sys.stderr)
+                return 2
+            print(f"TX ID=0x{args.id:X} 共 {len(data)} 字节 "
+                  f"(send_type={args.send_type})")
+            for i in range(0, len(data), 8):
+                chunk = data[i:i + 8]
+                ok = m.send_frame(args.id, chunk, send_type=args.send_type)
+                print(f"   帧{i // 8 + 1}: {chunk.hex(' ')} -> "
+                      f"{'OK' if ok else '发送失败/超时（检查总线节点与终端电阻）'}")
+            if args.no_recv:
+                return 0
+
+        print(f"等待接收（timeout={args.timeout}）…")
+        frames = m.recv_frame(timeout=args.timeout)
+        if not frames:
+            print("   无数据")
+            return 0
+        for fid, d in frames:
+            print(f"   RX ID=0x{fid:X} ({len(d)}B): {d.hex(' ')}")
+        print(f"统计: {m.stats}")
+    finally:
+        m.close()
+    return 0
+
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="bmu_testkit",
@@ -216,6 +262,23 @@ def build_parser():
     f.add_argument("--no-refactor", action="store_true", help="传完不发起重构")
     f.add_argument("--yes", action="store_true", help="跳过二次确认（慎用）")
     f.set_defaults(func=cmd_file_transfer)
+
+    c = sub.add_parser("can", help="CAN 通路收发（L1：任意 ID + 任意数据）")
+    c.add_argument("--channel", choices=["A", "B", "a", "b"], default="A",
+                   help="CAN A / CAN B，默认 A")
+    c.add_argument("--id", type=lambda s: int(s, 0), default=0,
+                   help="CAN ID，如 0x31801")
+    c.add_argument("--data", default=None,
+                   help='待发数据 hex，如 "00 25 25"；省略则只收不发')
+    c.add_argument("--baud", default="500K",
+                   help="1M/800K/500K/250K/125K/100K，默认 500K")
+    c.add_argument("--dll", default=None, help="ECanVci64.dll 路径（默认取 dist 下）")
+    c.add_argument("--timeout", type=float, default=3.0, help="接收等待秒数")
+    c.add_argument("--send-type", type=int, default=0,
+                   help="0 正常(总线无节点会阻塞) / 1 单次不重发 / "
+                        "2 自发自收 / 3 单次自发自收（自检，不需外部节点）")
+    c.add_argument("--no-recv", action="store_true", help="只发不收")
+    c.set_defaults(func=cmd_can)
 
     return p
 
