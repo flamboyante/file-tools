@@ -62,3 +62,7 @@ readflash*.bin
 *.sqlite
 *.sqlite3
 *.db
+
+# Agent 工作数据：含本机代理端口、conda 环境路径、串口清单等环境细节。
+# 本仓库为公开仓库，不入库；跨机器同步靠手动复制该目录。
+.workbuddy/
