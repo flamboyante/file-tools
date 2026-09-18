@@ -73,6 +73,8 @@ class FileTransfer:
         self.on_progress = on_progress or (lambda sent, total: None)
         self._in_transfer = False
         self._orig_sigint = None
+        # begin 应答后给固件的准备时间（对齐现有 Serial_thread 的 time.sleep(1)）
+        self.begin_settle_s = 1.0
 
     # ---------- SIGINT 保护 ----------
     def _install_sigint_guard(self):
@@ -82,8 +84,13 @@ class FileTransfer:
                 self.on_log("   请等待本轮传输结束；确需中止请先确认分区状态。")
                 return
             raise KeyboardInterrupt
-        self._orig_sigint = signal.getsignal(signal.SIGINT)
-        signal.signal(signal.SIGINT, handler)
+        try:
+            self._orig_sigint = signal.getsignal(signal.SIGINT)
+            signal.signal(signal.SIGINT, handler)
+        except (ValueError, AttributeError, OSError):
+            # 非主线程或不支持 signal 的环境：降级为不装保护，别把传输搞崩
+            self._orig_sigint = None
+            self.on_log("(提示) 当前环境无法安装 Ctrl+C 保护，传输过程中请勿中断。")
 
     def _restore_sigint(self):
         if self._orig_sigint is not None:
@@ -185,6 +192,10 @@ class FileTransfer:
             resp = self._wait_type(TYPE_BEGIN, timeout=timeout)
             res.last_response_hex = resp.hex(" ")
             self.on_log(f"[begin] 收到开始应答 OK ({resp.hex(' ')})")
+            if self.begin_settle_s > 0:
+                # 对齐现有实现：固件收到开始指令后需要时间准备（可能触发擦除）
+                self.on_log(f"[begin] 等待 {self.begin_settle_s}s 让固件准备")
+                time.sleep(self.begin_settle_s)
 
             # --- 阶段 2：数据帧，每帧等 0x8A ---
             res.stage = "data"

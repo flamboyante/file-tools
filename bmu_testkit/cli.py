@@ -12,6 +12,7 @@
 
 import argparse
 import json
+import os
 import sys
 import time
 
@@ -139,7 +140,6 @@ def _pick_default_file():
 
 def cmd_file_transfer(args):
     """422 文件传输（危险：会真实擦除目标分区，默认二次确认 + 传输中防 Ctrl+C）。"""
-    import os
     file_path = args.file or _pick_default_file()
     if not file_path or not os.path.isfile(file_path):
         print(f"文件不可用: {file_path}（用 --file 指定）", file=sys.stderr)

@@ -23,6 +23,7 @@
 
 import os
 import sys
+import time
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _ROOT not in sys.path:
@@ -158,16 +159,31 @@ def read_frame(transport, timeout=None, header: bytes = ACK_HEADER,
     步骤：同步到帧头 → 读满 8 字节 → 用长度字段算出总长 → 读剩余。
     这样任意数据域长度的帧都能正确接收。
     """
-    win = bytearray()
-    while True:                                   # 1. 同步到帧头（跳过噪声）
-        win += transport.read_exact(1, timeout=timeout)
-        if len(win) > max_sync:
+    # 注意：底层 read_some 常常**一次返回整帧**（串口缓冲区里已堆积完整报文），
+    # 所以不能假设「每次只读到 1 个字节」，必须在缓冲区里**查找帧头**，而不是检查末尾。
+    started = time.monotonic()
+    buf = bytearray()
+    while header not in bytes(buf):               # 1. 累积到包含帧头
+        chunk = transport.read_some(timeout=timeout)
+        if not chunk:
             raise ValueError(
-                f"同步帧头失败：读了 {len(win)} 字节仍未见到 {header.hex(' ')}，"
-                f"尾部: {bytes(win[-16:]).hex(' ')}")
-        if len(win) >= len(header) and bytes(win[-len(header):]) == header:
-            head = bytearray(header)
-            break
-    head += transport.read_exact(HEAD_LEN - len(header), timeout=timeout)  # 2. 补满 8
-    rest = frame_total_len(bytes(head)) - HEAD_LEN                          # 3. 剩余
-    return bytes(head + transport.read_exact(rest, timeout=timeout))
+                f"等待帧头 {header.hex(' ')} 超时：已收 {len(buf)} 字节 "
+                f"({bytes(buf).hex(' ')})")
+        buf += chunk
+        if len(buf) > max_sync:
+            raise ValueError(
+                f"同步帧头失败：{len(buf)} 字节内未见 {header.hex(' ')}，"
+                f"开头 32 字节: {bytes(buf[:32]).hex(' ')}")
+    idx = bytes(buf).find(header)                 # 2. 丢弃帧头之前的噪声
+    if idx > 0:
+        buf = buf[idx:]
+    while len(buf) < HEAD_LEN:                    # 3. 补齐前 8 字节
+        buf += transport.read_exact(HEAD_LEN - len(buf), timeout=timeout)
+    total = frame_total_len(bytes(buf[:HEAD_LEN]))   # 4. 按长度字段算总长
+    if len(buf) < total:                              # 只补缺口（数据可能已全部到达）
+        buf += transport.read_exact(total - len(buf), timeout=timeout)
+    # 记录收帧耗时：read_some 本身不记统计，这里补上，保证「历史计时」可用
+    if getattr(transport, "stats", None) is not None:
+        transport.stats.record(time.monotonic() - started, total)
+    # 超出 total 的部分属于后续帧，此处丢弃；本函数面向「一问一答」场景
+    return bytes(buf[:total])
