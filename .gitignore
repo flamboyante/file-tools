@@ -25,6 +25,9 @@ logs/
 debug_*.log
 app.log
 
+# Self-test artifacts (regenerated on every run)
+bmu_testkit/tools/*.png
+
 # Local IDE/editor files
 .idea/
 .vscode/
