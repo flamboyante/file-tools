@@ -1,0 +1,65 @@
+{
+  "note": "三方案 UI 对比的统一测试用例 —— 三份实现共读此文件",
+  "source": "从 WorkClass/CANCommandScheduler.py 的 PRESETS 派生，2026-09-20",
+  "channels": {
+    "A": "Channel1 / 500K",
+    "B": "Channel2 / 500K"
+  },
+  "commands": [
+    {
+      "name": "快遥 FAST",
+      "channel": "A",
+      "interval_ms": 500,
+      "count": -1,
+      "enabled": false,
+      "frames": [
+        {
+          "id": 202753,
+          "data": "00 5A 5A"
+        }
+      ]
+    },
+    {
+      "name": "姿态 ATTITUDE",
+      "channel": "A",
+      "interval_ms": 500,
+      "count": -1,
+      "enabled": false,
+      "frames": [
+        {
+          "id": 135260161,
+          "data": "00 25 00 02 00 01 02 03"
+        },
+        {
+          "id": 135258145,
+          "data": "04 05 06 07 08 09 0A 0B"
+        },
+        {
+          "id": 135258177,
+          "data": "0C 0D 0E 0F 10 11 12 13"
+        },
+        {
+          "id": 135258209,
+          "data": "14 15 16 17 18 19 1A 1B"
+        },
+        {
+          "id": 135262337,
+          "data": "1C 1D 1E 1F 20 21 22 55"
+        }
+      ]
+    },
+    {
+      "name": "BUS 总线帧",
+      "channel": "B",
+      "interval_ms": 500,
+      "count": -1,
+      "enabled": false,
+      "frames": [
+        {
+          "id": 134420481,
+          "data": "00 25 25"
+        }
+      ]
+    }
+  ]
+}

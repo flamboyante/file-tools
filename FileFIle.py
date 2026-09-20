@@ -637,6 +637,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             Action(FluentIcon.POWER_BUTTON, 'Can', triggered=self.Can_Window_Show),
             Action(FluentIcon.CONNECT, 'SerialSend', triggered=self.Serial_Send_Window_Show),
             Action(FluentIcon.SEND, 'Can 新版', triggered=self.Can_New_Window_Show),
+            Action(FluentIcon.VIEW, 'UI 方案对比', triggered=self.Ui_Compare_Window_Show),
         ])
 
         # 添加始终隐藏的动作
@@ -697,6 +698,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.can_window_new = NewCanWindow()
         self.can_window_new.setWindowModality(Qt.NonModal)
         self.can_window_new.show()
+
+    def Ui_Compare_Window_Show(self):
+        """UI 三方案对比入口（C 现状 / A qfluentwidgets / B QWebEngine）。
+
+        三个方案共用 uicmp.core 的数据与收发层，只换渲染层，
+        所以比较出来的是「界面实现差异」而不是「通信实现差异」。
+        """
+        try:
+            from uicmp.launcher import show as _show_uicmp
+            self.uicmp_window = _show_uicmp(self)
+        except Exception as e:
+            log_print("UI 方案对比窗口初始化失败: %s" % e)
+            QMessageBox.warning(self, "UI 方案对比", "初始化失败：%s" % e)
 
     def Serial_Send_Window_Show(self):
         self.serial_send_window = SerialSendWindow()
