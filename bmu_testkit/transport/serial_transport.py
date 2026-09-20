@@ -7,9 +7,22 @@
     SC 422    : 921600, 8 数据位, 奇校验, 1 停止位
 """
 
+import time
+
 import serial
 
 from .base import Transport
+
+
+# 内核读超时（秒）：只在 open() 时设定一次，之后**永不修改**。
+# 为什么固定不改：pyserial 的 `SerialBase.timeout` setter 在 `is_open` 为真时
+# 会调用 `_reconfigure_port()`；在 Windows 上它会对已打开的句柄重新
+# `SetCommState`。设备被拔掉 / 复位重枚举（STLink、BL 跳 App）时，该调用会抛
+# `SerialException: PermissionError(13, '连到系统上的设备没有发挥作用。')`。
+# 更隐蔽的是：即使设备健在，反复重配也会给收发引入时序抖动 ——
+# 对一个以"观测真实时序"为目标的工具来说，这本身就是污染。
+# 因此读超时改由 Python 侧自行计时，pyserial 侧保持定值。
+_READ_TIMEOUT = 0.05
 
 
 PARITY_MAP = {
@@ -28,7 +41,14 @@ STOPBITS_MAP = {1: serial.STOPBITS_ONE, 1.5: serial.STOPBITS_ONE_POINT_FIVE,
 
 
 class SerialTransport(Transport):
-    """串口通道。timeout=None 时阻塞等待（默认，便于观测真实耗时）。"""
+    """串口通道。
+
+    `timeout`（构造参数）是**上层等待语义的默认值**，由 `read_some` 自行计时实现，
+    **不会**传给 pyserial —— pyserial 侧的内核读超时固定为 `_READ_TIMEOUT`。
+    这样做是为了避免反复触发 `_reconfigure_port()`（详见 `_READ_TIMEOUT` 注释）。
+
+    `timeout=None` 时阻塞等待（默认，便于观测真实耗时）。
+    """
 
     def __init__(self, port: str, baudrate: int = 115200, bytesize: int = 8,
                  parity: str = "N", stopbits: float = 1, timeout=None,
@@ -51,7 +71,9 @@ class SerialTransport(Transport):
         self._ser.bytesize = BYTESIZE_MAP[self.bytesize]
         self._ser.parity = PARITY_MAP[self.parity]
         self._ser.stopbits = STOPBITS_MAP[self.stopbits]
-        self._ser.timeout = self.timeout
+        # 固定内核读超时，不用 self.timeout —— 超时语义由 read_some 自己实现。
+        # 见文件头 _READ_TIMEOUT 的说明。
+        self._ser.timeout = _READ_TIMEOUT
 
     @property
     def is_open(self) -> bool:
@@ -72,21 +94,27 @@ class SerialTransport(Transport):
         return n
 
     def read_some(self, timeout=None) -> bytes:
-        """读当前可用数据；无数据时按 timeout 等待（None = 阻塞）。"""
-        old = self._ser.timeout
-        if timeout is not None:
-            self._ser.timeout = timeout
-        try:
-            first = self._ser.read(1)      # 阻塞到有 1 字节（或超时）
-            if not first:
+        """读当前可用数据；无数据时按 timeout 等待（None = 阻塞）。
+
+        超时由本方法自行计时，**全程不修改 `self._ser.timeout`** ——
+        否则每次循环都会触发 pyserial 的 `_reconfigure_port()`，
+        设备重枚举时会抛 PermissionError（详见文件头 `_READ_TIMEOUT` 说明）。
+
+        内核侧超时为定值 `_READ_TIMEOUT`：先阻塞等 1 字节，等到就一次性
+        把缓冲区里其余字节全部取走，减少上层循环次数。
+        """
+        if timeout is not None and timeout <= 0:
+            timeout = None                          # 负值/0 统一按"等到有"处理
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while True:
+            first = self._ser.read(1)               # 阻塞至多 _READ_TIMEOUT
+            if first:
+                waiting = self._ser.in_waiting or 0
+                return first + self._ser.read(waiting) if waiting else first
+            if deadline is None:
+                continue
+            if time.monotonic() >= deadline:
                 return b""
-            waiting = self._ser.in_waiting or 0
-            if waiting:
-                return first + self._ser.read(waiting)
-            return first
-        finally:
-            if timeout is not None:
-                self._ser.timeout = old
 
     def drain_input(self) -> int:
         """丢弃输入缓冲区里的残留数据，返回丢弃的字节数。"""
