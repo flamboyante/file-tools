@@ -23,7 +23,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QPalette, QFont
 from PyQt5.QtWidgets import QWidget, QLabel, QSizePolicy
 
-from qfluentwidgets import (Theme, setTheme, CardWidget, ElevatedCardWidget)
+from qfluentwidgets import (Theme, setTheme, setThemeColor,
+                            CardWidget, ElevatedCardWidget)
 
 # ---------------------------------------------------------------- 色板 token
 # 命名约定：不带后缀 = 浅色用；*_D = 深色用。页面代码禁止散写色值，
@@ -187,6 +188,10 @@ def apply_theme(win, dark):
     顶层背景（QPalette + 窗口 QSS）、已建卡片底色、字体。
     """
     setTheme(Theme.DARK if dark else Theme.LIGHT)
+    # 坑④（2026-09-20 补）：qfluentwidgets 出厂强调色是青绿 #009faa——
+    # 不显式设置的话，PrimaryPushButton/CheckBox/Switch 全是那个绿调。
+    # 必须每次随主题重设：→ 主蓝（浅 #2f6fed / 深 #4c8dff）
+    setThemeColor(C_PRIMARY_D if dark else C_PRIMARY)
 
     # 坑①：setTheme 不管顶层背景 → QPalette + QSS 双保险
     pal = win.palette()

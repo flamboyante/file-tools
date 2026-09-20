@@ -14,12 +14,12 @@ FlashDownWindow + BatchFlashDownWindow 两个窗口）。
 """
 import os
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QBrush, QColor
+from PyQt5.QtCore import Qt, QRect
+from PyQt5.QtGui import QBrush, QColor, QPainter
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                              QTableWidget, QTableWidgetItem, QComboBox,
                              QProgressBar, QPushButton, QHeaderView,
-                             QAbstractItemView, QFrame)
+                             QAbstractItemView, QFrame, QStyledItemDelegate)
 
 from qfluentwidgets import (PushButton, PrimaryPushButton, CheckBox,
                             CaptionLabel, FluentIcon as FIF)
@@ -90,7 +90,38 @@ STATUS_COLOR = {
     T_SKIPPED: ('#9aa6b5', '#5b6b7b'),
 }
 
+# 列：0=文件 1=大小 2=Flash 3=目标 4=状态 5=进度 6=删除
 COL_FILE, COL_SIZE, COL_FLASH, COL_MEM, COL_STATUS, COL_PROGRESS, COL_DEL = range(7)
+
+
+class _StatusDelegate(QStyledItemDelegate):
+    """状态列：默认绘制右侧文字，左缘画 3px 圆角色条（颜色即状态）。
+
+    ⚠️ 为什么用 delegate 而不是列内 widget/item 背景：
+    ① item.setBackground 会被 QSS ::item 规则静默忽略
+    ② cellWidget 会被 ::item 的 padding 榨成 0 宽（10px 列 - 20px padding）
+    delegate 的 paint 不受这两者影响，是在 opt.rect 上直接画（实测结论）。
+    """
+
+    def __init__(self, get_dark, parent=None):
+        super(_StatusDelegate, self).__init__(parent)
+        self._get_dark = get_dark
+
+    def paint(self, painter, opt, index):
+        super(_StatusDelegate, self).paint(painter, opt, index)
+        status = index.data(Qt.UserRole)
+        if not status:
+            return
+        lf, df = STATUS_COLOR.get(status, ('#5b6b7b', '#8d99a8'))
+        color = QColor(df if self._get_dark() else lf)
+        r = opt.rect
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(color))
+        bar = QRect(r.left() + 3, r.top() + 11, 3, r.height() - 22)
+        painter.drawRoundedRect(bar, 1.5, 1.5)
+        painter.restore()
 
 
 class _DropArea(QFrame):
@@ -179,10 +210,12 @@ class TransferApp(QDialog):
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(40)
         self.table.horizontalHeader().setFixedHeight(36)
+        self.table.setItemDelegateForColumn(
+            COL_STATUS, _StatusDelegate(lambda: self._dark))
         self.table.horizontalHeader().setSectionResizeMode(
             COL_FILE, QHeaderView.Stretch)
         for col, w in ((COL_SIZE, 90), (COL_FLASH, 110), (COL_MEM, 190),
-                       (COL_STATUS, 90), (COL_PROGRESS, 130), (COL_DEL, 76)):
+                       (COL_STATUS, 96), (COL_PROGRESS, 130), (COL_DEL, 76)):
             self.table.horizontalHeader().setSectionResizeMode(
                 col, QHeaderView.Fixed)
             self.table.setColumnWidth(col, w)
@@ -315,6 +348,7 @@ class TransferApp(QDialog):
         status_item = item(STATUS_TEXT.get(t.status, t.status))
         lf, df = STATUS_COLOR.get(t.status, ('#5b6b7b', '#8d99a8'))
         status_item.setForeground(QColor(df if self._dark else lf))
+        status_item.setData(Qt.UserRole, t.status)     # delegate 画色条用
         self.table.setItem(row, COL_STATUS, status_item)
 
         flash_combo = QComboBox()
