@@ -57,14 +57,22 @@ ST_FAULT = 'fault'
 
 
 class _Reader(QThread):
-    """读线程：阻塞式等数据 + 排干。有数据就发，不等凑满。"""
+    """读线程：阻塞式等数据 + 排干。有数据就发，不等凑满。
+
+    异常处理约定（对照 SerialMedia.recv 的 finally:return 教训——
+    静默吞掉是那四个老 bug 之首）：读异常（拔线/重枚举）必须上报，
+    不允许无声吞掉。同一波连续异常只报一次（streak 去重），恢复读取
+    后清零——拔线时 UI 收到一条 error，而不是每 20ms 一条。
+    """
 
     rx = pyqtSignal(bytes)
+    failed = pyqtSignal(str)
 
     def __init__(self, media, parent=None):
         super(_Reader, self).__init__(parent)
         self._media = media
         self._running = True
+        self._err_streak = False      # 是否正处于连续异常中
 
     def stop(self):
         self._running = False      # read timeout 到点后自然退出
@@ -79,9 +87,12 @@ class _Reader(QThread):
                     if extra:
                         data += ser.read(extra)
                     self.rx.emit(bytes(data))
-            except Exception:
-                # 串口被拔 / close 竞态：退出由门面的 close 流程兜底
-                self.msleep(20)
+                self._err_streak = False
+            except Exception as e:
+                if not self._err_streak:          # 每波只报一次
+                    self._err_streak = True
+                    self.failed.emit('读串口异常: %s' % e)
+                self.msleep(50)
         # 清标志，让 close 后 run() 可安全重启（若复用线程对象）
 
 
@@ -92,6 +103,7 @@ class _Writer(QThread):
     """
 
     tx_done = pyqtSignal(int)     # 实际写出的字节数
+    failed = pyqtSignal(str)      # 写异常（帧丢失，调用方自行决定重发）
 
     def __init__(self, media, parent=None):
         super(_Writer, self).__init__(parent)
@@ -114,8 +126,9 @@ class _Writer(QThread):
             try:
                 n = ser.write(item)
                 self.tx_done.emit(int(n))
-            except Exception:
+            except Exception as e:
                 self.tx_done.emit(0)
+                self.failed.emit('写串口异常（该帧丢失）: %s' % e)
 
 
 class SerialLink(QObject):
@@ -193,7 +206,9 @@ class SerialLink(QObject):
             self._reader = _Reader(self._media)
             self._writer = _Writer(self._media)
             self._reader.rx.connect(self.rx)          # 透传（跨线程自动 queued）
+            self._reader.failed.connect(self.error)   # 读异常上报（去重后）
             self._writer.tx_done.connect(self.tx_done)
+            self._writer.failed.connect(self.error)
             self._reader.start()
             self._writer.start()
             self._set_state(ST_OPEN)
