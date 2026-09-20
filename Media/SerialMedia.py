@@ -45,23 +45,22 @@ class SerialMedia(Media):
             raise
 
     def send(self, data) -> int:
-        try:
-            n = self.serial.write(data)
-        except Exception:
-            n = 0
-            raise
-        finally:
-            return n
+        """写字节。异常正常抛出（2026-09-20 修复：原 finally:return
+        把异常吞掉并返回 0，调用方误以为发送成功——bug 清单#1）。
+        """
+        return self.serial.write(data)
 
     def recv(self, length) -> bytes:
-        try:
-            data = b''
-            while True:
-                tmp = self.serial.read(length - len(data))
-                data += tmp
-                if len(data) >= length:
-                    break
-        except Exception:
-            data = None
-        finally:
-            return data
+        """凑满 length 字节或抛异常。异常正常抛出（同 bug#1 修复）。
+
+        timeout=None（遗留默认）时行为与旧版一致：凑满才返回，否则阻塞。
+        timeout 有值时，读到空（超时到期且无数据）即返回已有部分，
+        由调用方处理短读——绝不静默吞异常。
+        """
+        data = b''
+        while len(data) < length:
+            tmp = self.serial.read(length - len(data))
+            if not tmp:
+                break
+            data += tmp
+        return data
