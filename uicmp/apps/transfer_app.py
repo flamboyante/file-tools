@@ -81,14 +81,10 @@ MEM_MAP = {
 STATUS_TEXT = {T_PENDING: '待执行', T_RUNNING: '执行中', T_DONE: '已完成',
                T_FAILED: '失败', T_SKIPPED: '已跳过'}
 
-# 状态前景色（浅色, 深色）——取自 theme 语义色，状态文字着色
-STATUS_COLOR = {
-    T_PENDING: ('#5b6b7b', '#8d99a8'),
-    T_RUNNING: ('#2f6fed', '#4c8dff'),
-    T_DONE: ('#0e9f6e', '#2fc48a'),
-    T_FAILED: ('#e5484d', '#f2555a'),
-    T_SKIPPED: ('#9aa6b5', '#5b6b7b'),
-}
+# 状态语义色统一在 theme（STATE_STRIPE 亮色画条 / STATE_TEXT 深色着色文字）。
+# 任务状态码 → theme 色板键的映射：
+STATE_KEY = {T_PENDING: 'pending', T_RUNNING: 'running', T_DONE: 'done',
+             T_FAILED: 'failed', T_SKIPPED: 'skipped'}
 
 # 列：0=文件 1=大小 2=Flash 3=目标 4=状态 5=进度 6=删除
 COL_FILE, COL_SIZE, COL_FLASH, COL_MEM, COL_STATUS, COL_PROGRESS, COL_DEL = range(7)
@@ -112,8 +108,7 @@ class _StatusDelegate(QStyledItemDelegate):
         status = index.data(Qt.UserRole)
         if not status:
             return
-        lf, df = STATUS_COLOR.get(status, ('#5b6b7b', '#8d99a8'))
-        color = QColor(df if self._get_dark() else lf)
+        color = QColor(theme.state_stripe(status, self._get_dark()))
         r = opt.rect
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing, True)
@@ -281,6 +276,11 @@ class TransferApp(QDialog):
     def _toggle_lock(self):
         self._locked = not self._locked
         self.btn_lock.setText('解锁' if self._locked else '锁定')
+        # 激活态：锁定后按钮变主色底（"点了之后有变化"的明确反馈）
+        if self._locked:
+            self.btn_lock.setStyleSheet(theme.primary_active_qss(self._dark))
+        else:
+            self.btn_lock.setStyleSheet('')
         self._refresh_table()
 
     # ------------------------------------------------------------ 调度
@@ -346,9 +346,9 @@ class TransferApp(QDialog):
                            item(os.path.basename(t.file_path), t.file_path))
         self.table.setItem(row, COL_SIZE, item(self._fmt(t.total)))
         status_item = item(STATUS_TEXT.get(t.status, t.status))
-        lf, df = STATUS_COLOR.get(t.status, ('#5b6b7b', '#8d99a8'))
-        status_item.setForeground(QColor(df if self._dark else lf))
-        status_item.setData(Qt.UserRole, t.status)     # delegate 画色条用
+        status_item.setForeground(QColor(
+            theme.state_text(STATE_KEY.get(t.status, 'pending'), self._dark)))
+        status_item.setData(Qt.UserRole, STATE_KEY.get(t.status, 'pending'))
         self.table.setItem(row, COL_STATUS, status_item)
 
         flash_combo = QComboBox()

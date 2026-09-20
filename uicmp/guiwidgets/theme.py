@@ -79,6 +79,38 @@ FONT_SIZE_BODY   = 12    # 正文（qfluentwidgets Caption 侧）
 FONT_SIZE_SUB    = 10.5  # 徽章/说明
 FONT_SIZE_TITLE  = 14    # 卡片标题（StrongBodyLabel 级）
 
+# ------------------------------------------------------------ 状态语义色
+# 分层设计（对比度约束不同）：
+#   STRIPE = 图形元素（3:1 达标即可）→ 用亮色，色条清透
+#   TEXT   = 文字（4.5:1 必须达标）→ 用深/浅亮色，保证可读
+# 明度对齐到同族：蓝/绿/红/灰四色的视觉重量一致，色条并排不打架。
+STATE_STRIPE = {           # (浅色, 深色)
+    'running': ('#3b82f6', '#4c8dff'),
+    'done':    ('#10b981', '#2fc48a'),
+    'failed':  ('#ef4444', '#f2555a'),
+    'pending': ('#94a3b8', '#64748b'),
+    'skipped': ('#cbd5e1', '#4a5561'),
+    'busy':    ('#60a5fa', '#7aa7ff'),
+}
+STATE_TEXT = {             # (浅色, 深色)——文字对比度 4.5:1+
+    'running': ('#1d4ed8', '#7aa7ff'),
+    'done':    ('#047857', '#34d399'),
+    'failed':  ('#dc2626', '#fb7185'),
+    'pending': ('#64748b', '#8d99a8'),
+    'skipped': ('#94a3b8', '#5b6b7b'),
+    'busy':    ('#1d4ed8', '#7aa7ff'),
+}
+
+
+def state_stripe(kind, dark):
+    a, b = STATE_STRIPE.get(kind, STATE_STRIPE['pending'])
+    return b if dark else a
+
+
+def state_text(kind, dark):
+    a, b = STATE_TEXT.get(kind, STATE_TEXT['pending'])
+    return b if dark else a
+
 
 # ---------------------------------------------------------------- QSS 工厂
 def chip_style(kind, dark):
@@ -313,10 +345,12 @@ def progress_qss(dark, height=8):
 
 
 def table_button_qss(dark):
-    """表格行内小按钮（删除等）：无底色，hover 变红。"""
+    """表格行内小按钮（删除等）：无底色，hover 变红，pressed 加深。"""
     text = _c(dark, C_TEXT_SUB, C_TEXT_SUB_D)
     hover_bg = _c(dark, C_RED_BG, C_RED_BG_D)
     hover_fg = _c(dark, C_RED, C_RED_D)
+    press_bg = _c(dark, '#fbd5d5', '#4a1d21')
+    press_fg = _c(dark, '#b91c1c', '#ff8f93')
     return '''
     QPushButton {
         background: transparent;
@@ -326,18 +360,21 @@ def table_button_qss(dark):
         border-radius: 6px;
     }
     QPushButton:hover { background: %(hb)s; color: %(hf)s; }
+    QPushButton:pressed { background: %(pb)s; color: %(pf)s; }
     QPushButton:disabled { color: %(dis)s; }
-    ''' % dict(text=text, hb=hover_bg, hf=hover_fg,
+    ''' % dict(text=text, hb=hover_bg, hf=hover_fg, pb=press_bg, pf=press_fg,
                dis=_c(dark, '#b8c2ce', '#4a5561'))
 
 
 def outline_button_qss(dark):
-    """工具条按钮（白底描边 + hover 淡蓝——旧批量窗口配方精修版）。"""
+    """工具条按钮（白底描边 + hover 淡蓝 + **pressed 下沉**）。"""
     bg = _c(dark, C_CARD, '#1d2530')
     border = _c(dark, '#cfd7e3', '#2a3442')
     text = _c(dark, C_TEXT, C_TEXT_D)
     hover_bg = _c(dark, '#eef4ff', '#1b2a47')
     hover_border = _c(dark, '#8fb5ff', '#4c8dff')
+    press_bg = _c(dark, '#dbeafe', '#24365c')
+    press_border = _c(dark, '#6a9bf0', '#3b6fd4')
     return '''
     QPushButton {
         background: %(bg)s;
@@ -347,8 +384,10 @@ def outline_button_qss(dark):
         color: %(text)s;
     }
     QPushButton:hover { background: %(hb)s; border-color: %(hb2)s; }
+    QPushButton:pressed { background: %(pb)s; border-color: %(pb2)s; }
     QPushButton:disabled { color: %(dis)s; border-color: %(disbg)s; background: %(disbg)s; }
     ''' % dict(bg=bg, border=border, text=text, hb=hover_bg, hb2=hover_border,
+               pb=press_bg, pb2=press_border,
                dis=_c(dark, '#9aa6b5', '#5b6b7b'),
                disbg=_c(dark, '#eef2f9', '#141a22'))
 
@@ -386,6 +425,24 @@ def log_qss(dark):
         font-size: 12px;
     }
     ''' % dict(bg=bg, border=border, text=text, font=FONT_FAMILY, r=R_CARD)
+
+
+def primary_active_qss(dark):
+    """按钮「激活/选中」态：主色底白字（锁定、开关类按钮用）。"""
+    bg = _c(dark, C_PRIMARY, C_PRIMARY_D)
+    press = _c(dark, '#1d4ed8', '#3b6fd4')
+    return '''
+    QPushButton {
+        background: %(bg)s;
+        color: #ffffff;
+        border: 1px solid %(bg)s;
+        border-radius: 7px;
+        padding: 6px 13px;
+        font-weight: 600;
+    }
+    QPushButton:hover { border-color: #ffffff; }
+    QPushButton:pressed { background: %(p)s; }
+    ''' % dict(bg=bg, p=press)
 
 
 def scrollbar_qss(dark):
