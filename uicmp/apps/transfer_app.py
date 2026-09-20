@@ -19,7 +19,7 @@ from PyQt5.QtGui import QBrush, QColor
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                              QTableWidget, QTableWidgetItem, QComboBox,
                              QProgressBar, QPushButton, QHeaderView,
-                             QAbstractItemView)
+                             QAbstractItemView, QFrame)
 
 from qfluentwidgets import (PushButton, PrimaryPushButton, CheckBox,
                             CaptionLabel, FluentIcon as FIF)
@@ -81,7 +81,36 @@ MEM_MAP = {
 STATUS_TEXT = {T_PENDING: '待执行', T_RUNNING: '执行中', T_DONE: '已完成',
                T_FAILED: '失败', T_SKIPPED: '已跳过'}
 
+# 状态前景色（浅色, 深色）——取自 theme 语义色，状态文字着色
+STATUS_COLOR = {
+    T_PENDING: ('#5b6b7b', '#8d99a8'),
+    T_RUNNING: ('#2f6fed', '#4c8dff'),
+    T_DONE: ('#0e9f6e', '#2fc48a'),
+    T_FAILED: ('#e5484d', '#f2555a'),
+    T_SKIPPED: ('#9aa6b5', '#5b6b7b'),
+}
+
 COL_FILE, COL_SIZE, COL_FLASH, COL_MEM, COL_STATUS, COL_PROGRESS, COL_DEL = range(7)
+
+
+class _DropArea(QFrame):
+    """空态：虚线拖拽区 + 引导文案（无任务时显示，替代空表格）。"""
+
+    def __init__(self, parent=None):
+        super(_DropArea, self).__init__(parent)
+        self.setObjectName('dropArea')
+        lay = QVBoxLayout(self)
+        lay.addStretch(1)
+        t = QLabel('拖入固件文件，或点上方「添加」')
+        t.setObjectName('dropTitle')
+        t.setAlignment(Qt.AlignCenter)
+        h = QLabel('每一行选择 Flash 与目标；单发 = 只放一个文件')
+        h.setObjectName('dropHint')
+        h.setAlignment(Qt.AlignCenter)
+        lay.addWidget(t)
+        lay.addSpacing(4)
+        lay.addWidget(h)
+        lay.addStretch(1)
 
 
 class TransferApp(QDialog):
@@ -115,35 +144,50 @@ class TransferApp(QDialog):
         self.link.error.connect(self.log)
         v.addLayout(self._wrap(self.conn))
 
-        # ---- 工具条
+        # ---- 工具条：左（动作组） ··· 右（策略）
         tools = QHBoxLayout()
         tools.setSpacing(theme.GAP_SM)
         self.btn_add = PushButton(FIF.ADD, '添加')
         self.btn_del_pending = PushButton('删除未开始')
-        self.chk_abort = CheckBox('失败即中止')
-        self.chk_abort.setToolTip('不勾选：失败跳过继续下一个（旧行为）')
         self.btn_start = PrimaryPushButton(FIF.PLAY, '开始')
         self.btn_pause = PushButton(FIF.PAUSE, '暂停')
         self.btn_resume = PushButton(FIF.PLAY_SOLID, '继续')
         self.btn_stop = PushButton(FIF.CLOSE, '停止')
         self.btn_lock = PushButton('锁定')
-        for w in (self.btn_add, self.btn_del_pending, self.chk_abort,
+        for w in (self.btn_add, self.btn_del_pending,
                   self.btn_start, self.btn_pause, self.btn_resume,
                   self.btn_stop, self.btn_lock):
             tools.addWidget(w)
         tools.addStretch(1)
+        self.chk_abort = CheckBox('失败即中止')
+        self.chk_abort.setToolTip('不勾选：失败跳过继续下一个（旧行为）')
+        tools.addWidget(self.chk_abort)
         self.btn_pause.setEnabled(False)
         self.btn_resume.setEnabled(False)
         self.btn_stop.setEnabled(False)
         v.addLayout(tools)
 
-        # ---- 任务表
+        # ---- 任务区：空态（拖拽引导） / 表格 互斥切换
+        self.drop_area = _DropArea()
+        v.addWidget(self.drop_area, 3)
+
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(
             ['文件', '大小', 'Flash', '目标', '状态', '进度', ''])
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.setSelectionMode(QAbstractItemView.NoSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(40)
+        self.table.horizontalHeader().setFixedHeight(36)
+        self.table.horizontalHeader().setSectionResizeMode(
+            COL_FILE, QHeaderView.Stretch)
+        for col, w in ((COL_SIZE, 90), (COL_FLASH, 110), (COL_MEM, 190),
+                       (COL_STATUS, 90), (COL_PROGRESS, 130), (COL_DEL, 76)):
+            self.table.horizontalHeader().setSectionResizeMode(
+                col, QHeaderView.Fixed)
+            self.table.setColumnWidth(col, w)
+        self.table.setShowGrid(True)   # 细浅网格线（gridline-color 在 QSS），利于多列对行
+        self.table.setVisible(False)
         v.addWidget(self.table, 3)
 
         # ---- 总进度 + 日志
@@ -249,6 +293,9 @@ class TransferApp(QDialog):
         for i, t in enumerate(tasks):
             self._render_row(i)
         self._update_total()
+        # 空态切换：无任务显示拖拽引导，有任务显示表格
+        self.drop_area.setVisible(not tasks)
+        self.table.setVisible(bool(tasks))
 
     def _render_row(self, row):
         if row >= self.table.rowCount():
@@ -265,12 +312,15 @@ class TransferApp(QDialog):
         self.table.setItem(row, COL_FILE,
                            item(os.path.basename(t.file_path), t.file_path))
         self.table.setItem(row, COL_SIZE, item(self._fmt(t.total)))
-        self.table.setItem(row, COL_STATUS,
-                           item(STATUS_TEXT.get(t.status, t.status)))
+        status_item = item(STATUS_TEXT.get(t.status, t.status))
+        lf, df = STATUS_COLOR.get(t.status, ('#5b6b7b', '#8d99a8'))
+        status_item.setForeground(QColor(df if self._dark else lf))
+        self.table.setItem(row, COL_STATUS, status_item)
 
         flash_combo = QComboBox()
         flash_combo.addItems(FLASH_MAP.keys())
         flash_combo.setEnabled(editable)
+        flash_combo.setStyleSheet(theme.combo_qss(self._dark))
         flash_combo.currentTextChanged.connect(
             lambda key, r=row: self._set_flash(r, key))
         self.table.setCellWidget(row, COL_FLASH, flash_combo)
@@ -283,6 +333,7 @@ class TransferApp(QDialog):
         mem_combo = QComboBox()
         mem_combo.addItems(MEM_MAP.keys())
         mem_combo.setEnabled(editable)
+        mem_combo.setStyleSheet(theme.combo_qss(self._dark))
         mem_combo.currentTextChanged.connect(
             lambda key, r=row: self._set_mem(r, key))
         self.table.setCellWidget(row, COL_MEM, mem_combo)
@@ -293,12 +344,16 @@ class TransferApp(QDialog):
 
         bar = QProgressBar()
         bar.setRange(0, 100)
+        bar.setTextVisible(False)
         pct = int(t.transferred * 100 / t.total) if t.total else 0
         bar.setValue(pct)
+        bar.setStyleSheet(theme.progress_qss(self._dark, height=8))
         self.table.setCellWidget(row, COL_PROGRESS, bar)
 
         del_btn = QPushButton('删除')
         del_btn.setEnabled(editable)
+        del_btn.setCursor(Qt.PointingHandCursor)
+        del_btn.setStyleSheet(theme.table_button_qss(self._dark))
         del_btn.clicked.connect(lambda checked=False, r=row: self._del_row(r))
         self.table.setCellWidget(row, COL_DEL, del_btn)
 
@@ -346,16 +401,18 @@ class TransferApp(QDialog):
 
     # ------------------------------------------------------------ 主题
     def apply_theme(self, dark):
+        """⚠️ 约定：任何控件重建之后都要重调本函数。
+        表格单元格内的 combo/进度条/按钮在 _refresh_table 重建时按当时
+        主题上色——所以切主题必须重刷表格，否则行内控件不跟随。"""
         self._dark = dark
         theme.apply_theme(self, dark)
         self.conn.set_dark(dark)
-        self.log_view.setStyleSheet(
-            'QTextEdit{background:%s; color:%s; border:1px solid %s;'
-            'border-radius:%dpx; font-family:"%s","Consolas"; font-size:12px;}'
-            % (theme.C_CARD_D if dark else theme.C_CARD,
-               theme.C_TEXT_D if dark else theme.C_TEXT,
-               theme.C_GRAY_BG_D if dark else theme.C_GRAY_BG,
-               theme.R_CARD, theme.FONT_FAMILY))
+        self.table.setStyleSheet(
+            theme.table_qss(dark) + theme.scrollbar_qss(dark))
+        self.drop_area.setStyleSheet(theme.drop_area_qss(dark))
+        self.log_view.setStyleSheet(theme.log_qss(dark))
+        self.total_bar.setStyleSheet(theme.progress_qss(dark, height=16))
+        self._refresh_table()
         theme.fix_fonts(self)
 
     def toggle_theme(self):

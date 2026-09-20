@@ -212,3 +212,198 @@ def apply_theme(win, dark):
 
     # 坑③：SimSun 拨正
     fix_fonts(win)
+
+
+# ================================================================ 控件 QSS 工厂
+# 目标：把「旧批量窗口验证过的那套清新配方」+ v3 卡片语言统一到这里，
+# 一次定义、所有页面共用、浅深双套。细则见各函数 docstring。
+
+def _c(dark, light_val, dark_val):
+    return dark_val if dark else light_val
+
+
+def table_qss(dark):
+    """表格：白卡圆角 + 定制表头 + 行 hover。浅深双套。"""
+    card = _c(dark, C_CARD, C_CARD_D)
+    border = _c(dark, '#dfe5ee', '#232c39')
+    grid = _c(dark, '#eef1f6', '#1f2937')
+    head_bg = _c(dark, '#f5f7fa', '#1d2530')
+    head_fg = _c(dark, C_TEXT_SUB, C_TEXT_SUB_D)
+    text = _c(dark, C_TEXT, C_TEXT_D)
+    hover = _c(dark, '#f3f7ff', '#1b2532')
+    return '''
+    QTableWidget {
+        background: %(card)s;
+        border: 1px solid %(border)s;
+        border-radius: %(radius)dpx;
+        gridline-color: %(grid)s;
+        color: %(text)s;
+        font-size: 12px;
+    }
+    QTableWidget::item { padding: 6px 10px; border: none; }
+    QTableWidget::item:hover { background: %(hover)s; }
+    QTableWidget QTableCornerButton::section { background: %(head_bg)s; border: none; }
+    QHeaderView::section {
+        background: %(head_bg)s;
+        color: %(head_fg)s;
+        border: none;
+        border-bottom: 1px solid %(grid)s;
+        padding: 8px 10px;
+        font-weight: 600;
+        font-size: 12px;
+    }
+    ''' % dict(card=card, border=border, grid=grid, head_bg=head_bg,
+               head_fg=head_fg, text=text, hover=hover, radius=R_CARD)
+
+
+def combo_qss(dark):
+    """下拉框（表格单元格内 / 独立皆可用）。"""
+    bg = _c(dark, C_CARD, '#1d2530')
+    border = _c(dark, '#cfd7e3', '#2a3442')
+    text = _c(dark, C_TEXT, C_TEXT_D)
+    hover_border = _c(dark, '#8fb5ff', '#4c8dff')
+    view_bg = _c(dark, C_CARD, '#1d2530')
+    sel_bg = _c(dark, C_PRIMARY_BG, C_PRIMARY_BG_D)
+    return '''
+    QComboBox {
+        background: %(bg)s;
+        border: 1px solid %(border)s;
+        border-radius: 6px;
+        padding: 3px 8px;
+        color: %(text)s;
+    }
+    QComboBox:hover { border-color: %(hb)s; }
+    QComboBox:disabled { color: %(dis)s; background: %(disbg)s; }
+    QComboBox::drop-down { border: none; width: 18px; }
+    QComboBox QAbstractItemView {
+        background: %(view)s;
+        color: %(text)s;
+        border: 1px solid %(border)s;
+        selection-background-color: %(sel)s;
+        outline: none;
+    }
+    ''' % dict(bg=bg, border=border, text=text, hb=hover_border, view=view_bg,
+               sel=sel_bg, dis=_c(dark, C_GRAY, C_GRAY_D),
+               disbg=_c(dark, '#e8edf3', '#20262f'))
+
+
+def progress_qss(dark, height=8):
+    """进度条：圆角轨道 + 主色填充。"""
+    track = _c(dark, C_GRAY_BG, C_GRAY_BG_D)
+    chunk = _c(dark, C_PRIMARY, C_PRIMARY_D)
+    text = _c(dark, C_TEXT_SUB, C_TEXT_SUB_D)
+    return '''
+    QProgressBar {
+        background: %(track)s;
+        border: none;
+        border-radius: %(h)dpx;
+        min-height: %(h)dpx;
+        max-height: %(h)dpx;
+        text-align: center;
+        font-size: 11px;
+        color: %(text)s;
+    }
+    QProgressBar::chunk { background: %(chunk)s; border-radius: %(h)dpx; }
+    ''' % dict(track=track, chunk=chunk, text=text, h=height)
+
+
+def table_button_qss(dark):
+    """表格行内小按钮（删除等）：无底色，hover 变红。"""
+    text = _c(dark, C_TEXT_SUB, C_TEXT_SUB_D)
+    hover_bg = _c(dark, C_RED_BG, C_RED_BG_D)
+    hover_fg = _c(dark, C_RED, C_RED_D)
+    return '''
+    QPushButton {
+        background: transparent;
+        border: none;
+        color: %(text)s;
+        padding: 4px 8px;
+        border-radius: 6px;
+    }
+    QPushButton:hover { background: %(hb)s; color: %(hf)s; }
+    QPushButton:disabled { color: %(dis)s; }
+    ''' % dict(text=text, hb=hover_bg, hf=hover_fg,
+               dis=_c(dark, '#b8c2ce', '#4a5561'))
+
+
+def outline_button_qss(dark):
+    """工具条按钮（白底描边 + hover 淡蓝——旧批量窗口配方精修版）。"""
+    bg = _c(dark, C_CARD, '#1d2530')
+    border = _c(dark, '#cfd7e3', '#2a3442')
+    text = _c(dark, C_TEXT, C_TEXT_D)
+    hover_bg = _c(dark, '#eef4ff', '#1b2a47')
+    hover_border = _c(dark, '#8fb5ff', '#4c8dff')
+    return '''
+    QPushButton {
+        background: %(bg)s;
+        border: 1px solid %(border)s;
+        border-radius: 7px;
+        padding: 6px 13px;
+        color: %(text)s;
+    }
+    QPushButton:hover { background: %(hb)s; border-color: %(hb2)s; }
+    QPushButton:disabled { color: %(dis)s; border-color: %(disbg)s; background: %(disbg)s; }
+    ''' % dict(bg=bg, border=border, text=text, hb=hover_bg, hb2=hover_border,
+               dis=_c(dark, '#9aa6b5', '#5b6b7b'),
+               disbg=_c(dark, '#eef2f9', '#141a22'))
+
+
+def drop_area_qss(dark):
+    """空态拖拽区：虚线边框 + 引导文案。"""
+    bg = _c(dark, '#fbfdff', '#12181f')
+    dash = _c(dark, '#9bb7dc', '#31415a')
+    title = _c(dark, '#1e40af', '#7aa7ff')
+    hint = _c(dark, '#64748b', '#8d99a8')
+    return '''
+    QFrame#dropArea {
+        background: %(bg)s;
+        border: 2px dashed %(dash)s;
+        border-radius: %(r)dpx;
+    }
+    QLabel#dropTitle { color: %(title)s; font-size: 17px; font-weight: 700; }
+    QLabel#dropHint { color: %(hint)s; font-size: 12px; }
+    ''' % dict(bg=bg, dash=dash, title=title, hint=hint, r=R_CARD)
+
+
+def log_qss(dark):
+    """日志区：卡片底 + 细边 + 等宽字体。"""
+    bg = _c(dark, C_CARD, C_CARD_D)
+    border = _c(dark, '#dfe5ee', '#232c39')
+    text = _c(dark, C_TEXT, C_TEXT_D)
+    return '''
+    QTextEdit {
+        background: %(bg)s;
+        color: %(text)s;
+        border: 1px solid %(border)s;
+        border-radius: %(r)dpx;
+        padding: 6px;
+        font-family: "%(font)s", "Consolas";
+        font-size: 12px;
+    }
+    ''' % dict(bg=bg, border=border, text=text, font=FONT_FAMILY, r=R_CARD)
+
+
+def scrollbar_qss(dark):
+    """细圆角滚动条（质感件）。"""
+    handle = _c(dark, '#c4cdd9', '#37414f')
+    hover = _c(dark, '#9aa6b5', '#4a5561')
+    return '''
+    QScrollBar:vertical {
+        background: transparent; width: 10px; margin: 2px;
+    }
+    QScrollBar::handle:vertical {
+        background: %(handle)s; border-radius: 4px; min-height: 30px;
+    }
+    QScrollBar::handle:vertical:hover { background: %(hover)s; }
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+    QScrollBar:horizontal {
+        background: transparent; height: 10px; margin: 2px;
+    }
+    QScrollBar::handle:horizontal {
+        background: %(handle)s; border-radius: 4px; min-width: 30px;
+    }
+    QScrollBar::handle:horizontal:hover { background: %(hover)s; }
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+    QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
+    ''' % dict(handle=handle, hover=hover)
