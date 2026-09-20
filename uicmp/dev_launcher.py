@@ -42,7 +42,7 @@ class DevLauncher(QDialog):
         grid = QHBoxLayout()
         grid.setSpacing(theme.GAP)
         self._btn_console = self._make_card(grid, '控制台', FIF.CONNECT, self._open_console)
-        self._btn_transfer = self._make_card(grid, '文件传输', FIF.DOWNLOAD, None)
+        self._btn_transfer = self._make_card(grid, '文件传输', FIF.DOWNLOAD, self._open_transfer)
         self._btn_sc422 = self._make_card(grid, 'SC422', FIF.SEND, None)
         self._btn_debug = self._make_card(grid, 'CAN', FIF.ROBOT, None)
         v.addLayout(grid)
@@ -73,6 +73,16 @@ class DevLauncher(QDialog):
         if w is None or not w.isVisible():
             w = ConsoleApp()
             self._windows['console'] = w
+        w.show()
+        w.raise_()
+        w.activateWindow()
+
+    def _open_transfer(self):
+        from uicmp.apps.transfer_app import TransferApp
+        w = self._windows.get('transfer')
+        if w is None or not w.isVisible():
+            w = TransferApp()
+            self._windows['transfer'] = w
         w.show()
         w.raise_()
         w.activateWindow()
