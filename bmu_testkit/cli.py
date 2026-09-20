@@ -8,6 +8,10 @@
 
 超时说明：默认**不超时**（阻塞等待），只记录耗时 —— 便于观察真实时序与定位问题。
 需要设上限时用 --timeout 3（秒）。
+
+镜像说明：串口收发默认镜像到日志文件并广播到 UDP 端口，供人用监视窗口实时观察。
+监视窗口：python -m bmu_testkit.watch_serial
+用 --no-mirror 关闭；--mirror-port 指定 UDP 端口。
 """
 
 import argparse
@@ -19,6 +23,7 @@ import time
 import serial.tools.list_ports
 
 from .core.filetransfer import FileTransfer
+from .mirror import DEFAULT_UDP_PORT, attach_mirror, parse_event
 from .protocol import Ycyk422Protocol
 from .transport import SerialTransport
 
@@ -42,8 +47,32 @@ def _make_transport(args) -> SerialTransport:
         params["baudrate"] = args.baud
     if args.parity is not None:
         params["parity"] = args.parity
-    return SerialTransport(port=args.port, timeout=args.timeout,
-                           name=args.preset or args.port, **params)
+    t = SerialTransport(port=args.port, timeout=args.timeout,
+                        name=args.preset or args.port, **params)
+    return _mirror(t, args)
+
+
+def _mirror(transport, args):
+    """给通道套上镜像层。默认开启：日志落盘 + UDP 广播，供监视窗口实时观察。
+
+    sink 在串口打开成功后才创建，因此打不开串口时不会留下空日志。
+    """
+    if getattr(args, "no_mirror", False):
+        return transport
+    port = getattr(args, "mirror_port", None) or DEFAULT_UDP_PORT
+
+    def on_ready(log_path, udp_port):
+        print("=" * 58)
+        if log_path:
+            print("[镜像] 完整日志: %s" % log_path)
+        if udp_port:
+            print("[镜像] 实时观察: python -m bmu_testkit.watch_serial --port %d"
+                  % udp_port)
+        print("=" * 58)
+
+    return attach_mirror(transport, udp_port=port,
+                         note_fn=lambda: getattr(args, "cmd", ""),
+                         on_ready=on_ready)
 
 
 def cmd_scan(args):
@@ -235,6 +264,10 @@ def build_parser():
         sp.add_argument("--idle", type=float, default=0.3,
                         help="静默判定时长（秒），默认 0.3")
         sp.add_argument("--max-bytes", type=int, default=4096)
+        sp.add_argument("--no-mirror", action="store_true",
+                        help="关闭串口镜像（默认开启：日志 + UDP 广播）")
+        sp.add_argument("--mirror-port", type=int, default=None,
+                        help="镜像 UDP 端口，默认 %d" % DEFAULT_UDP_PORT)
 
     r = sub.add_parser("raw", help="L1：发送任意字节流")
     add_common(r)
