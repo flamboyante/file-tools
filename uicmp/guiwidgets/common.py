@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """common · 跨页面复用的控件（通道配置条 / 日志面板等）。"""
-from PyQt5.QtCore import Qt, QSettings
+from PyQt5.QtCore import Qt, QRect, QSettings
+from PyQt5.QtGui import QBrush, QColor, QPainter
 from PyQt5.QtSerialPort import QSerialPortInfo
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel
+from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QLabel, QStyledItemDelegate)
 
 from qfluentwidgets import (ComboBox, EditableComboBox, PrimaryPushButton,
                             PushButton, TransparentToolButton, FluentIcon as FIF)
@@ -27,6 +28,38 @@ PRESETS = [
 CUSTOM_PRESET = '自定义'
 
 PARITY_ITEMS = [('无校验 (N)', 'N'), ('奇校验 (O)', 'O'), ('偶校验 (E)', 'E')]
+
+
+class StatusDelegate(QStyledItemDelegate):
+    """状态列 delegate：默认绘制文字，左缘画 3px 圆角色条（颜色即状态）。
+
+    kind 从 `index.data(Qt.UserRole)` 取（'running'/'done'/'failed'/'warn'/
+    'pending'/'skipped'），颜色取自 theme.STATE_STRIPE。
+
+    ⚠️ 为什么用 delegate 而不是列内 widget/item 背景：
+    ① item.setBackground 会被 QSS ::item 规则**静默忽略**（不画）
+    ② cellWidget 会被 ::item 的 padding 榨成 **0 宽**（10px 列 - 20px padding）
+    delegate 的 paint 在 opt.rect 上直接画，不受这两者影响（实测结论）。
+    """
+
+    def __init__(self, get_dark, parent=None):
+        super(StatusDelegate, self).__init__(parent)
+        self._get_dark = get_dark
+
+    def paint(self, painter, opt, index):
+        super(StatusDelegate, self).paint(painter, opt, index)
+        kind = index.data(Qt.UserRole)
+        if not kind:
+            return
+        color = QColor(theme.state_stripe(kind, self._get_dark()))
+        r = opt.rect
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(color))
+        bar = QRect(r.left() + 3, r.top() + 11, 3, r.height() - 22)
+        painter.drawRoundedRect(bar, 1.5, 1.5)
+        painter.restore()
 
 
 class ConnectionBar(QWidget):

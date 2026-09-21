@@ -363,6 +363,30 @@ def progress_qss(dark, height=8, kind='running'):
     ''' % dict(track=track, chunk=chunk, text=text, h=height)
 
 
+def table_action_qss(dark):
+    """表格行内动作按钮：无底色，hover 淡蓝（"单发""查看"这类非破坏操作）。
+
+    注意与 table_button_qss 区分：那个 hover 变红，只给破坏性操作（删除）。
+    """
+    text = _c(dark, C_TEXT_SUB, C_TEXT_SUB_D)
+    hover_bg = _c(dark, C_PRIMARY_BG, C_PRIMARY_BG_D)
+    hover_fg = _c(dark, C_PRIMARY, C_PRIMARY_D)
+    press_bg = _c(dark, '#dbeafe', '#24406e')
+    return '''
+    QPushButton {
+        background: transparent;
+        border: none;
+        color: %(text)s;
+        padding: 3px 8px;
+        border-radius: 6px;
+    }
+    QPushButton:hover { background: %(hb)s; color: %(hf)s; }
+    QPushButton:pressed { background: %(pb)s; }
+    QPushButton:disabled { color: %(dis)s; }
+    ''' % dict(text=text, hb=hover_bg, hf=hover_fg, pb=press_bg,
+               dis=_c(dark, '#b8c2ce', '#4a5561'))
+
+
 def primary_tint_qss(dark):
     """浅蓝（主色 tint）按钮：主色家族但弱一档——用于「撤销型」主操作。
 

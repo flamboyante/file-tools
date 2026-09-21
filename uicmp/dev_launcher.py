@@ -44,7 +44,7 @@ class DevLauncher(QDialog):
         self._btn_console = self._make_card(grid, '控制台', FIF.CONNECT, self._open_console)
         self._btn_transfer = self._make_card(grid, '文件传输', FIF.DOWNLOAD, self._open_transfer)
         self._btn_sc422 = self._make_card(grid, 'SC422', FIF.SEND, self._open_sc422)
-        self._btn_debug = self._make_card(grid, 'CAN', FIF.ROBOT, None)
+        self._btn_debug = self._make_card(grid, 'CAN', FIF.ROBOT, self._open_can)
         v.addLayout(grid)
         v.addStretch(1)
         theme.apply_theme(self, False)
@@ -83,6 +83,16 @@ class DevLauncher(QDialog):
         if w is None or not w.isVisible():
             w = TransferApp()
             self._windows['transfer'] = w
+        w.show()
+        w.raise_()
+        w.activateWindow()
+
+    def _open_can(self):
+        from uicmp.apps.can_app import CanApp
+        w = self._windows.get('can')
+        if w is None or not w.isVisible():
+            w = CanApp()
+            self._windows['can'] = w
         w.show()
         w.raise_()
         w.activateWindow()

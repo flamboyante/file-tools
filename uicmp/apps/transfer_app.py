@@ -29,7 +29,7 @@ from uicmp.guicore.transfer_queue import (TransferQueue, TransferTask,
                                           T_FAILED, T_SKIPPED,
                                           POLICY_SKIP, POLICY_ABORT)
 from uicmp.guiwidgets import theme
-from uicmp.guiwidgets.common import ConnectionBar
+from uicmp.guiwidgets.common import ConnectionBar, StatusDelegate
 
 FLASH_MAP = {
     "基带": 0xFB,
@@ -90,33 +90,8 @@ STATE_KEY = {T_PENDING: 'pending', T_RUNNING: 'running', T_DONE: 'done',
 COL_FILE, COL_SIZE, COL_FLASH, COL_MEM, COL_STATUS, COL_PROGRESS, COL_DEL = range(7)
 
 
-class _StatusDelegate(QStyledItemDelegate):
-    """状态列：默认绘制右侧文字，左缘画 3px 圆角色条（颜色即状态）。
-
-    ⚠️ 为什么用 delegate 而不是列内 widget/item 背景：
-    ① item.setBackground 会被 QSS ::item 规则静默忽略
-    ② cellWidget 会被 ::item 的 padding 榨成 0 宽（10px 列 - 20px padding）
-    delegate 的 paint 不受这两者影响，是在 opt.rect 上直接画（实测结论）。
-    """
-
-    def __init__(self, get_dark, parent=None):
-        super(_StatusDelegate, self).__init__(parent)
-        self._get_dark = get_dark
-
-    def paint(self, painter, opt, index):
-        super(_StatusDelegate, self).paint(painter, opt, index)
-        status = index.data(Qt.UserRole)
-        if not status:
-            return
-        color = QColor(theme.state_stripe(status, self._get_dark()))
-        r = opt.rect
-        painter.save()
-        painter.setRenderHint(QPainter.Antialiasing, True)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QBrush(color))
-        bar = QRect(r.left() + 3, r.top() + 11, 3, r.height() - 22)
-        painter.drawRoundedRect(bar, 1.5, 1.5)
-        painter.restore()
+# 状态色条 delegate 已提到公共层：uicmp.guiwidgets.common.StatusDelegate
+# （transfer 与 can 两页共用同一套"颜色即状态"的画法）
 
 
 class _DropArea(QFrame):
@@ -212,7 +187,7 @@ class TransferApp(QDialog):
         self.table.verticalHeader().setDefaultSectionSize(40)
         self.table.horizontalHeader().setFixedHeight(36)
         self.table.setItemDelegateForColumn(
-            COL_STATUS, _StatusDelegate(lambda: self._dark))
+            COL_STATUS, StatusDelegate(lambda: self._dark))
         self.table.horizontalHeader().setSectionResizeMode(
             COL_FILE, QHeaderView.Stretch)
         for col, w in ((COL_SIZE, 90), (COL_FLASH, 110), (COL_MEM, 190),
