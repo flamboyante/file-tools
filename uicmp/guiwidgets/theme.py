@@ -324,10 +324,14 @@ def combo_qss(dark):
                disbg=_c(dark, '#e8edf3', '#20262f'))
 
 
-def progress_qss(dark, height=8):
-    """进度条：圆角轨道 + 主色填充。"""
+def progress_qss(dark, height=8, kind='running'):
+    """进度条：圆角轨道 + 状态色填充。
+
+    kind 取状态语义色（STATE_STRIPE，和表格色条同族）：
+    running=蓝 / done=绿 / failed=红 / pending·skipped=灰
+    """
     track = _c(dark, C_GRAY_BG, C_GRAY_BG_D)
-    chunk = _c(dark, C_PRIMARY, C_PRIMARY_D)
+    chunk = state_stripe(kind, dark)
     text = _c(dark, C_TEXT_SUB, C_TEXT_SUB_D)
     return '''
     QProgressBar {
@@ -342,6 +346,30 @@ def progress_qss(dark, height=8):
     }
     QProgressBar::chunk { background: %(chunk)s; border-radius: %(h)dpx; }
     ''' % dict(track=track, chunk=chunk, text=text, h=height)
+
+
+def primary_tint_qss(dark):
+    """浅蓝（主色 tint）按钮：主色家族但弱一档——用于「撤销型」主操作。
+
+    层级设计：一个界面只留一个深蓝实心主按钮表达"现在最该点的"，
+    其余同家族动作用浅蓝实心（如连接后的「断开」）。
+    """
+    bg = _c(dark, C_PRIMARY_BG, C_PRIMARY_BG_D)
+    fg = _c(dark, '#1d4ed8', '#7aa7ff')
+    border = _c(dark, '#c7dcff', '#2b4a7d')
+    press = _c(dark, '#d3e4ff', '#24406e')
+    return '''
+    QPushButton {
+        background: %(bg)s;
+        color: %(fg)s;
+        border: 1px solid %(border)s;
+        border-radius: 7px;
+        padding: 6px 13px;
+        font-weight: 600;
+    }
+    QPushButton:hover { border-color: %(fg)s; }
+    QPushButton:pressed { background: %(p)s; border-color: %(fg)s; }
+    ''' % dict(bg=bg, fg=fg, border=border, p=press)
 
 
 def table_button_qss(dark):

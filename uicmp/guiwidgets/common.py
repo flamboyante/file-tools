@@ -84,11 +84,15 @@ class ConnectionBar(QWidget):
             self._link.open(self.current_port(), baud=self.current_baud())
 
     def _on_opened(self):
-        self.btn_open.setText('关闭')
+        # 「断开」是撤销型动作：主色家族但降一档（浅蓝 tint），
+        # 把深蓝实心主按钮的名额让给页面当前该做的主操作
+        self.btn_open.setText('断开')
+        self.btn_open.setStyleSheet(theme.primary_tint_qss(self._dark))
         self._set_badge('已连接', 'ok')
 
     def _on_closed(self):
         self.btn_open.setText('打开')
+        self.btn_open.setStyleSheet('')      # 恢复 PrimaryPushButton 原生深蓝
         self._set_badge('未连接', 'gray')
 
     def _on_error(self, msg):
@@ -106,3 +110,5 @@ class ConnectionBar(QWidget):
         self._dark = dark
         kind = 'ok' if self._link.is_open else 'gray'
         self._set_badge(self.badge.text(), kind)
+        if self._link.is_open:      # 断开态样式要随主题重算
+            self.btn_open.setStyleSheet(theme.primary_tint_qss(dark))

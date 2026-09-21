@@ -152,6 +152,7 @@ class TransferApp(QDialog):
         from uicmp.guicore.serial_link import SerialLink
         self.link = link if link is not None else SerialLink()
         self.queue = TransferQueue(self.link)
+        self._total_kind_cache = None
 
         self._build()
         self.apply_theme(False)
@@ -176,20 +177,19 @@ class TransferApp(QDialog):
         self.btn_add = PushButton(FIF.ADD, '添加')
         self.btn_del_pending = PushButton('删除未开始')
         self.btn_start = PrimaryPushButton(FIF.PLAY, '开始')
+        # 暂停/继续 = 同一位置的双面按钮（省一个按钮、少一步认知）
         self.btn_pause = PushButton(FIF.PAUSE, '暂停')
-        self.btn_resume = PushButton(FIF.PLAY_SOLID, '继续')
         self.btn_stop = PushButton(FIF.CLOSE, '停止')
         self.btn_lock = PushButton('锁定')
-        for w in (self.btn_add, self.btn_del_pending,
-                  self.btn_start, self.btn_pause, self.btn_resume,
-                  self.btn_stop, self.btn_lock):
+        for w in (self.btn_add, self.btn_del_pending, self.btn_start,
+                  self.btn_pause, self.btn_stop, self.btn_lock):
             tools.addWidget(w)
         tools.addStretch(1)
         self.chk_abort = CheckBox('失败即中止')
         self.chk_abort.setToolTip('不勾选：失败跳过继续下一个（旧行为）')
         tools.addWidget(self.chk_abort)
+        self._paused = False
         self.btn_pause.setEnabled(False)
-        self.btn_resume.setEnabled(False)
         self.btn_stop.setEnabled(False)
         v.addLayout(tools)
 
@@ -232,14 +232,45 @@ class TransferApp(QDialog):
         self.btn_add.clicked.connect(self._pick_files)
         self.btn_del_pending.clicked.connect(self._del_pending)
         self.btn_start.clicked.connect(self._start)
-        self.btn_pause.clicked.connect(self.queue.pause)
-        self.btn_resume.clicked.connect(self.queue.resume)
-        self.btn_stop.clicked.connect(self.queue.cancel)
+        self.btn_pause.clicked.connect(self._toggle_pause)
+        self.btn_stop.clicked.connect(self._stop)
         self.btn_lock.clicked.connect(self._toggle_lock)
         self.queue.task_changed.connect(self._on_task_changed)
         self.queue.queue_finished.connect(self._on_queue_finished)
         self.queue.queue_cancelled.connect(
             lambda: self.log('队列已取消'))
+
+    def _toggle_pause(self):
+        """暂停 ⇄ 继续：同一按钮双面切换。"""
+        if not self.queue.is_running:
+            return
+        self._paused = not self._paused
+        if self._paused:
+            self.queue.pause()
+            self.btn_pause.setText('继续')
+            self.btn_pause.setIcon(FIF.PLAY)
+            self.log('已暂停（当前帧完成后生效）')
+        else:
+            self.queue.resume()
+            self.btn_pause.setText('暂停')
+            self.btn_pause.setIcon(FIF.PAUSE)
+            self.log('已继续')
+
+    def _stop(self):
+        """停止 = 中断当前传输（不可逆：设备可能停在半写状态）→ 二次确认。"""
+        if not self.queue.is_running:
+            return
+        if not self._confirm_stop():
+            return
+        self.queue.cancel()
+
+    def _confirm_stop(self):
+        """抽成独立方法：冒烟测试可替换（offscreen 下不能真弹窗）。"""
+        from qfluentwidgets import MessageBox
+        box = MessageBox(
+            '确定中断当前传输？',
+            '设备可能停留在半写状态，需重新下载才能恢复。', self)
+        return bool(box.exec())
 
     def _wrap(self, w):
         h = QHBoxLayout()
@@ -301,11 +332,15 @@ class TransferApp(QDialog):
     def _set_running_ui(self, running):
         self.btn_start.setEnabled(not running)
         self.btn_pause.setEnabled(running)
-        self.btn_resume.setEnabled(running)
         self.btn_stop.setEnabled(running)
         self.btn_add.setEnabled(not running)
         self.btn_del_pending.setEnabled(not running)
         self.btn_lock.setEnabled(not running)
+        if not running:
+            # 队列结束：暂停按钮复位成「暂停」面
+            self._paused = False
+            self.btn_pause.setText('暂停')
+            self.btn_pause.setIcon(FIF.PAUSE)
 
     def _on_task_changed(self, idx):
         if idx < 0:
@@ -381,7 +416,9 @@ class TransferApp(QDialog):
         bar.setTextVisible(False)
         pct = int(t.transferred * 100 / t.total) if t.total else 0
         bar.setValue(pct)
-        bar.setStyleSheet(theme.progress_qss(self._dark, height=8))
+        # 进度条也是图形元素：和状态色条同族上色（蓝/绿/红/灰）
+        bar.setStyleSheet(theme.progress_qss(
+            self._dark, height=8, kind=STATE_KEY.get(t.status, 'pending')))
         self.table.setCellWidget(row, COL_PROGRESS, bar)
 
         del_btn = QPushButton('删除')
@@ -412,6 +449,24 @@ class TransferApp(QDialog):
         total = sum(t.total for t in tasks)
         done = sum(t.transferred for t in tasks if t.status != T_FAILED)
         self.total_bar.setValue(int(done * 100 / total) if total else 0)
+        # 总进度条跟随队列整体状态变色（只在状态变化时重设，避免频繁刷 QSS）
+        kind = self._total_kind()
+        if kind != self._total_kind_cache:
+            self._total_kind_cache = kind
+            self.total_bar.setStyleSheet(
+                theme.progress_qss(self._dark, height=16, kind=kind))
+
+    def _total_kind(self):
+        tasks = self.queue.tasks
+        if not tasks:
+            return 'pending'
+        if any(t.status == T_RUNNING for t in tasks):
+            return 'running'
+        if any(t.status == T_FAILED for t in tasks):
+            return 'failed'
+        if any(t.status == T_DONE for t in tasks):
+            return 'done'
+        return 'pending'
 
     @staticmethod
     def _fmt(n):
@@ -445,7 +500,7 @@ class TransferApp(QDialog):
             theme.table_qss(dark) + theme.scrollbar_qss(dark))
         self.drop_area.setStyleSheet(theme.drop_area_qss(dark))
         self.log_view.setStyleSheet(theme.log_qss(dark))
-        self.total_bar.setStyleSheet(theme.progress_qss(dark, height=16))
+        self._total_kind_cache = None      # 主题变了，总进度条样式要重算
         self._refresh_table()
         theme.fix_fonts(self)
 
