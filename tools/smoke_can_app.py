@@ -39,9 +39,9 @@ def main():
     w.show()
     spin(app, 0.6)
 
-    # ---- 1. 初始渲染：默认预设 A8 + B3
-    assert w.table.rowCount() == 11, w.table.rowCount()
-    print('1. 初始渲染 OK（A8 + B3 = 11 行）')
+    # ---- 1. 初始渲染：Tab 默认通道 A（8 条），B 另有 3 条
+    assert w.table.rowCount() == 8, w.table.rowCount()
+    print('1. 初始渲染 OK（通道 A Tab = 8 行，B 3 条在另一 Tab）')
 
     # ---- 2. 打开双通道 → 卡片状态
     ses.open_channel(CHAN_A)
@@ -51,14 +51,15 @@ def main():
     assert w.bus[CHAN_A]._badge.text() == '已连接'
     print('2. 双通道打开 OK（按钮/徽章同步）')
 
-    # ---- 3. 筛选
-    w.combo_filter.setCurrentText('通道 A')
+    # ---- 3. 通道 Tab（v3：一次只看一个通道）
+    w._switch_tab('A')
     assert w.table.rowCount() == 8, w.table.rowCount()
-    w.combo_filter.setCurrentText('通道 B')
+    assert '8 条' in w.tab_btn['A'].text(), w.tab_btn['A'].text()
+    w._switch_tab('B')
     assert w.table.rowCount() == 3, w.table.rowCount()
-    w.combo_filter.setCurrentText('全部')
-    assert w.table.rowCount() == 11
-    print('3. 通道筛选 OK（A=8 / B=3 / 全部=11）')
+    w._switch_tab(CHAN_A)
+    assert w.table.rowCount() == 8
+    print('3. 通道 Tab OK（A=8 / B=3，选中态带条数）')
 
     # ---- 4. 启用一条 → 状态列 + 计数
     c0 = ses.commands(CHAN_A)[0]
@@ -87,7 +88,7 @@ def main():
             break
     w._on_dbl(star_row, 1)
     spin(app, 0.1)
-    assert w.table.rowCount() == 12, '展开后应 +1 行: %d' % w.table.rowCount()
+    assert w.table.rowCount() == 9, '展开后应 +1 行: %d' % w.table.rowCount()
     # 残留检查：展开行的开关列与单发列必须无 widget（上一轮踩过）
     assert w.table.cellWidget(star_row + 1, COL_SW) is None, '展开行残留开关 widget'
     assert w.table.cellWidget(star_row + 1, COL_SEND) is None, '展开行残留单发 widget'
@@ -95,7 +96,7 @@ def main():
     assert '帧5' in frames_text and '0x' in frames_text, frames_text[:80]
     w._on_dbl(star_row, 1)
     spin(app, 0.1)
-    assert w.table.rowCount() == 11, '折叠后应恢复'
+    assert w.table.rowCount() == 8, '折叠后应恢复'
     print('5. 展开/折叠帧明细 OK（无 widget 残留）')
 
     # ---- 6. 单发 → 统计 + 监视

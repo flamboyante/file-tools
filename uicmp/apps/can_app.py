@@ -76,7 +76,8 @@ class CanApp(QDialog):
         self._dark = False
         self._expanded = set()          # 展开帧明细的指令 id
         self._selected = None           # 当前选中指令
-        self._filter = '全部'
+        self._cur_ch = CHAN_A           # 当前通道 Tab（一次只看一个通道）
+        self._mon_paused = False
         self.setObjectName('CanApp')
         self.setWindowTitle('CAN 指令台 · gui-ng')
         self.resize(980, 760)
@@ -118,15 +119,26 @@ class CanApp(QDialog):
                   self.btn_import, self.btn_export):
             tools.addWidget(w, 0)
         tools.addStretch(1)
-        tools.addWidget(QLabel('筛选'), 0)
-        self.combo_filter = ComboBox()
-        self.combo_filter.setFixedWidth(96)
-        self.combo_filter.addItems(['全部', '通道 A', '通道 B'])
-        tools.addWidget(self.combo_filter, 0)
         self.btn_theme = TransparentToolButton(FIF.CONSTRACT)
         self.btn_theme.setToolTip('浅/深主题')
         tools.addWidget(self.btn_theme, 0)
         v.addLayout(tools)
+
+        # ---- 通道 Tab（v3：一次只看一个通道，不是并排两张卡）
+        tab = QHBoxLayout()
+        tab.setSpacing(6)
+        self.tab_btn = {}
+        for ch in (CHAN_A, CHAN_B):
+            b = QPushButton('通道 %s' % ch)
+            b.setFixedHeight(28)
+            b.clicked.connect(lambda _c=False, c=ch: self._switch_tab(c))
+            self.tab_btn[ch] = b
+            tab.addWidget(b, 0)
+        tab.addStretch(1)
+        self.lb_lock = QLabel('')      # 运行锁提示条（v3 的 lockVeil）
+        self.lb_lock.setAlignment(Qt.AlignCenter)
+        tab.addWidget(self.lb_lock, 1)
+        v.addLayout(tab)
 
         # ---- 命令表
         self.table = QTableWidget(0, COL_COUNT)
@@ -163,20 +175,34 @@ class CanApp(QDialog):
         run.addWidget(self.lb_info, 0)
         v.addLayout(run)
 
-        # ---- 监视
+        # ---- 监视（v3：通道/方向是按钮组，可同时开；不是下拉）
         mon_row = QHBoxLayout()
-        mon_row.setSpacing(theme.GAP_SM)
+        mon_row.setSpacing(6)
         mon_row.addWidget(self._label('监视'), 0)
-        self.combo_mon_ch = ComboBox()
-        self.combo_mon_ch.setFixedWidth(92)
-        self.combo_mon_ch.addItems(['全部', 'A', 'B'])
-        self.combo_mon_kind = ComboBox()
-        self.combo_mon_kind.setFixedWidth(104)
-        self.combo_mon_kind.addItems(['全部', 'TX', 'RX', 'ERR'])
-        mon_row.addWidget(self.combo_mon_ch, 0)
-        mon_row.addWidget(self.combo_mon_kind, 0)
+        self.fbtn_ch = {}
+        for ch, kind in ((CHAN_A, 'blue'), (CHAN_B, 'purple')):
+            b = QPushButton('通道 %s' % ch)
+            b.setCheckable(True)
+            b.setChecked(True)
+            b.setFixedHeight(26)
+            b.setFixedWidth(76)
+            b.clicked.connect(self._refresh_mon_filter)
+            self.fbtn_ch[ch] = b
+            mon_row.addWidget(b, 0)
+        self.fbtn_kind = {}
+        for k in ('TX', 'RX', 'ERR'):
+            b = QPushButton(k)
+            b.setCheckable(True)
+            b.setChecked(True)
+            b.setFixedHeight(26)
+            b.setFixedWidth(56)
+            b.clicked.connect(self._refresh_mon_filter)
+            self.fbtn_kind[k] = b
+            mon_row.addWidget(b, 0)
         mon_row.addStretch(1)
-        self.btn_clear_mon = QPushButton('清屏')
+        self.btn_pause_mon = QPushButton('暂停')
+        self.btn_clear_mon = QPushButton('清空')
+        mon_row.addWidget(self.btn_pause_mon, 0)
         mon_row.addWidget(self.btn_clear_mon, 0)
         v.addLayout(mon_row)
 
@@ -184,7 +210,83 @@ class CanApp(QDialog):
         self.mon.setReadOnly(True)
         v.addWidget(self.mon, 1)
 
+        # ---- 底部统计条（v3 bottombar）：TX·A / TX·B / RX 总数 / 应答中 / 错误 + 图例
+        v.addLayout(self._make_bottombar())
+
         self._wire()
+
+    def _make_bottombar(self):
+        """底部统计卡 + 色系图例（TX/RX/ERR 统一放这里，不放总线卡内）。"""
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self.stat_cards = {}
+        self._stat_specs = [
+            ('txA', 'TX · A', 'running'), ('txB', 'TX · B', 'busy'),
+            ('rx', 'RX 总数', 'done'), ('busy', '应答中', 'running'),
+            ('err', '发送错误', 'failed'),
+        ]
+        for key, label, kind in self._stat_specs:
+            card = self._make_stat_card(label, kind)
+            self.stat_cards[key] = card
+            row.addWidget(card, 0)
+        row.addStretch(1)
+
+        legend = QHBoxLayout()
+        legend.setSpacing(10)
+        for text, kind in (('通道 A', 'running'), ('通道 B', 'busy'),
+                           ('发送/运行', 'running'), ('接收/成功', 'done'),
+                           ('错误/失败', 'failed')):
+            dot = QLabel('●')
+            dot.setStyleSheet('color: %s;' % theme.state_stripe(kind, self._dark))
+            lb = QLabel(text)
+            lb.setStyleSheet('font-size: 11px; color: %s;'
+                             % (theme.C_TEXT_SUB_D if self._dark
+                                else theme.C_TEXT_SUB))
+            h = QHBoxLayout()
+            h.setSpacing(4)
+            h.addWidget(dot, 0)
+            h.addWidget(lb, 0)
+            box = self._hbox(h)
+            legend.addWidget(box, 0)
+        row.addLayout(legend)
+        return row
+
+    def _make_stat_card(self, label, kind):
+        """统计卡：大数字（状态色）+ 小标签。"""
+        card = QFrame()
+        card.setObjectName('statCard')
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(10, 6, 10, 6)
+        lay.setSpacing(0)
+        n = QLabel('0')
+        n.setAlignment(Qt.AlignCenter)
+        n.setStyleSheet('font-size: 17px; font-weight: 600; color: %s;'
+                        % theme.state_stripe(kind, self._dark))
+        k = QLabel(label)
+        k.setAlignment(Qt.AlignCenter)
+        k.setStyleSheet('font-size: 11px; color: %s;'
+                        % (theme.C_TEXT_SUB_D if self._dark else theme.C_TEXT_SUB))
+        lay.addWidget(n)
+        lay.addWidget(k)
+        card._num = n
+        card._kind = kind
+        return card
+
+    def _hbox(self, layout):
+        from PyQt5.QtWidgets import QWidget
+        box = QWidget()
+        box.setLayout(layout)
+        return box
+
+    def _switch_tab(self, ch):
+        """切换通道 Tab（v3：一次只看一个通道）。"""
+        self._cur_ch = ch
+        self._selected = None
+        self._refresh_table()
+
+    def _refresh_mon_filter(self):
+        """过滤条件变化时清屏（当前视图只显示符合条件的新日志）。"""
+        self.mon.clear()
 
     def _label(self, text):
         lb = QLabel(text)
@@ -215,15 +317,10 @@ class CanApp(QDialog):
         lay.addWidget(badge, 0)
 
         lay.addStretch(1)
-        stat = QLabel('TX 0 / RX 0 / ERR 0')
-        stat.setStyleSheet('font-family: Consolas, "Microsoft YaHei UI"; color: %s;'
-                           % (theme.C_TEXT_SUB_D if self._dark else theme.C_TEXT_SUB))
-        lay.addWidget(stat, 0)
-
+        # ⚠️ TX/RX/ERR 不放在这里——按 v3 设计统一收进底部 bottombar 统计卡
         card._chip = chip
         card._btn = btn
         card._badge = badge
-        card._stat = stat
         btn.clicked.connect(lambda: self._toggle_bus(ch))
         return card
 
@@ -238,12 +335,10 @@ class CanApp(QDialog):
         self.combo_preset.currentTextChanged.connect(self._add_preset)
         self.btn_import.clicked.connect(self._import)
         self.btn_export.clicked.connect(self._export)
-        self.combo_filter.currentTextChanged.connect(self._on_filter)
         self.btn_run.clicked.connect(self._toggle_run)
         self.btn_stop.clicked.connect(self.session.stop_sending)
         self.btn_clear_mon.clicked.connect(self.mon.clear)
-        self.combo_mon_ch.currentTextChanged.connect(lambda _t: self.mon.clear())
-        self.combo_mon_kind.currentTextChanged.connect(lambda _t: self.mon.clear())
+        self.btn_pause_mon.clicked.connect(self._toggle_pause_mon)
         self.table.itemSelectionChanged.connect(self._on_select)
         self.table.cellDoubleClicked.connect(self._on_dbl)
         self.table.cellClicked.connect(self._on_cell_click)
@@ -286,22 +381,28 @@ class CanApp(QDialog):
         self._refresh_stats()
 
     def _refresh_stats(self):
-        for ch, card in self.bus.items():
-            st = self.session.stats(ch)
-            card._stat.setText('TX %d / RX %d / ERR %d'
-                               % (st['tx'], st['rx'], st['err']))
+        """刷新底部统计卡（TX·A / TX·B / RX 总数 / 应答中 / 发送错误）。"""
+        a = self.session.stats(CHAN_A)
+        b = self.session.stats(CHAN_B)
+        vals = {'txA': a['tx'], 'txB': b['tx'],
+                'rx': a['rx'] + b['rx'],
+                'busy': 1 if self.session.is_running and self.session.active_count() else 0,
+                'err': a['err'] + b['err']}
+        for key, card in self.stat_cards.items():
+            card._num.setText(str(vals.get(key, 0)))
 
     # ------------------------------------------------------------ 表格
     def _visible_cmds(self):
-        if self._filter == '通道 A':
-            return list(self.session.commands(CHAN_A))
-        if self._filter == '通道 B':
-            return list(self.session.commands(CHAN_B))
-        return list(self.session.all_commands())
+        """只显示当前 Tab 通道的指令（v3：通道是 Tab，不是并列筛选）。"""
+        return list(self.session.commands(self._cur_ch))
 
-    def _on_filter(self, text):
-        self._filter = text
-        self._refresh_table()
+    def _toggle_pause_mon(self):
+        """暂停/继续刷新监视流（暂停期间只丢弃显示，收发仍在跑）。"""
+        self._mon_paused = not self._mon_paused
+        self.btn_pause_mon.setText('继续' if self._mon_paused else '暂停')
+        self.btn_pause_mon.setStyleSheet(
+            theme.primary_active_qss(self._dark) if self._mon_paused
+            else theme.outline_button_qss(self._dark))
 
     def _refresh_table(self):
         cmds = self._visible_cmds()
@@ -320,6 +421,7 @@ class CanApp(QDialog):
                 self._render_frames_row(r, c)
                 r += 1
         self.table.setUpdatesEnabled(True)
+        self._refresh_tabs()
         self._refresh_info()
 
     def _render_row(self, row, c):
@@ -400,6 +502,15 @@ class CanApp(QDialog):
         box = QWidget()
         box.setLayout(h)
         return box
+
+    def _refresh_tabs(self):
+        """Tab 上带条数 + 选中态（v3：通道 A 3 条 / 通道 B 2 条）。"""
+        for ch, b in self.tab_btn.items():
+            n = len(self.session.commands(ch))
+            b.setText('通道 %s · %d 条' % (ch, n))
+            b.setStyleSheet(theme.primary_active_qss(self._dark)
+                            if ch == self._cur_ch
+                            else theme.outline_button_qss(self._dark))
 
     def _refresh_info(self):
         n = self.session.active_count()
@@ -483,7 +594,7 @@ class CanApp(QDialog):
             self.session.move_command(c.channel, c, d)
 
     def _filter_channel(self):
-        return CHAN_B if self._filter == '通道 B' else CHAN_A
+        return self._cur_ch
 
     def _add_preset(self, name):
         if not name or name.startswith('预设指令'):
@@ -580,29 +691,40 @@ class CanApp(QDialog):
         if on:
             self.btn_run.setText('⏹ 发送中（已锁定）')
             self.btn_run.setStyleSheet(theme.primary_active_qss(self._dark))
+            self.lb_lock.setText('● 运行中 — 指令配置已锁定（查看/单发仍可用）')
         else:
             self.btn_run.setText('▶ 开始发送（锁定配置）')
             self.btn_run.setStyleSheet('')
+            self.lb_lock.setText('')
             self._mon('SYS', '定时发送已停止')
+        self.lb_lock.setStyleSheet(
+            'background: %s; color: %s; border-radius: 6px; padding: 4px 10px;'
+            'font-weight: 600;'
+            % (theme.C_PRIMARY_BG_D if self._dark else theme.C_PRIMARY_BG,
+               theme.C_PRIMARY_D if self._dark else theme.C_PRIMARY)
+            if on else '')
         for w in (self.btn_add, self.btn_copy, self.btn_del,
                   self.btn_up, self.btn_down, self.btn_import):
             w.setEnabled(not on)
         self._refresh_table()
+        self._refresh_stats()
 
     # ------------------------------------------------------------ 监视
     def _mon(self, kind, msg):
-        ch_filter = self.combo_mon_ch.currentText()
-        kind_filter = self.combo_mon_kind.currentText()
-        if kind_filter != '全部' and kind not in kind_filter:
+        """kind：'TX-A' / 'RX-B' / 'ERR' / 'SYS'（SYS=系统提示，始终显示）。"""
+        if self._mon_paused:
             return
-        if ch_filter != '全部':
-            if kind.startswith('TX') and not kind.endswith(ch_filter):
+        if kind.startswith(('TX-', 'RX-')):
+            ch = kind[-1]
+            if not self.fbtn_ch.get(ch) or not self.fbtn_ch[ch].isChecked():
                 return
-            if kind.startswith('RX') and not kind.endswith(ch_filter):
+            if kind.startswith('TX-') and not self.fbtn_kind['TX'].isChecked():
                 return
+            if kind.startswith('RX-') and not self.fbtn_kind['RX'].isChecked():
+                return
+        elif kind == 'ERR' and not self.fbtn_kind['ERR'].isChecked():
+            return
 
-        color = {'TX': 'running', 'RX': 'done', 'ERR': 'failed'}.get(
-            kind[:3] if kind[:3] in ('TX-', 'RX-', 'ERR') else kind, 'pending')
         if kind.startswith('TX'):
             color = 'running'
         elif kind.startswith('RX'):
@@ -659,6 +781,17 @@ class CanApp(QDialog):
                   self.btn_down, self.btn_import, self.btn_export,
                   self.btn_stop, self.btn_clear_mon):
             b.setStyleSheet(qss)
+        # 过滤按钮组（勾选=主色激活，未勾选=描边）
+        for b in list(self.fbtn_ch.values()) + list(self.fbtn_kind.values()):
+            b.setStyleSheet(theme.primary_active_qss(dark) if b.isChecked()
+                            else qss)
+        self.btn_pause_mon.setStyleSheet(
+            theme.primary_active_qss(dark) if self._mon_paused else qss)
+        # 统计卡数字色（状态语义色随主题）
+        for key, card in self.stat_cards.items():
+            card._num.setStyleSheet(
+                'font-size: 17px; font-weight: 600; color: %s;'
+                % theme.state_stripe(card._kind, dark))
         if self.session.is_running:
             self.btn_run.setStyleSheet(theme.primary_active_qss(dark))
         # 总线卡：重建通道徽章（颜色随主题）
@@ -671,9 +804,6 @@ class CanApp(QDialog):
             card._chip = new
             if self.session.is_open(ch):
                 card._btn.setStyleSheet(theme.primary_tint_qss(dark))
-            card._stat.setStyleSheet(
-                'font-family: Consolas, "Microsoft YaHei UI"; color: %s;'
-                % (theme.C_TEXT_SUB_D if dark else theme.C_TEXT_SUB))
         self._refresh_table()
         theme.fix_fonts(self)
 
