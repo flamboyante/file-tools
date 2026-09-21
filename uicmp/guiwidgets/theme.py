@@ -458,11 +458,17 @@ def drop_area_qss(dark):
     ''' % dict(bg=bg, dash=dash, title=title, hint=hint, r=R_CARD)
 
 
-def log_qss(dark):
-    """日志区：卡片底 + 细边 + 等宽字体。"""
+def log_qss(dark, mono=False):
+    """日志/终端区：卡片底 + 细边 + 等宽字体。
+
+    mono=True（console 终端）：Consolas 优先，中文回退雅黑——
+    终端里数字/十六进制列对齐比中文更重要；
+    mono=False（transfer 日志等）：雅黑优先，中文为主。
+    """
     bg = _c(dark, C_CARD, C_CARD_D)
     border = _c(dark, '#dfe5ee', '#232c39')
     text = _c(dark, C_TEXT, C_TEXT_D)
+    fam = ('"Consolas", "%s"' % FONT_FAMILY) if mono else ('"%s", "Consolas"' % FONT_FAMILY)
     return '''
     QTextEdit {
         background: %(bg)s;
@@ -470,10 +476,32 @@ def log_qss(dark):
         border: 1px solid %(border)s;
         border-radius: %(r)dpx;
         padding: 6px;
-        font-family: "%(font)s", "Consolas";
+        font-family: %(font)s;
         font-size: 12px;
     }
-    ''' % dict(bg=bg, border=border, text=text, font=FONT_FAMILY, r=R_CARD)
+    ''' % dict(bg=bg, border=border, text=text, font=fam, r=R_CARD)
+
+
+def line_edit_qss(dark):
+    """单行输入框：圆角描边 + focus 高亮主色（搜索/命令/过滤通用）。"""
+    bg = _c(dark, '#ffffff', '#161c26')
+    border = _c(dark, '#cfd7e3', '#2a3442')
+    text = _c(dark, C_TEXT, C_TEXT_D)
+    focus = _c(dark, C_PRIMARY, C_PRIMARY_D)
+    dis = _c(dark, '#9aa6b5', '#5b6b7b')
+    disbg = _c(dark, '#eef2f9', '#141a22')
+    return '''
+    QLineEdit {
+        background: %(bg)s;
+        border: 1px solid %(border)s;
+        border-radius: 7px;
+        padding: 6px 10px;
+        color: %(text)s;
+        font-size: 12px;
+    }
+    QLineEdit:focus { border-color: %(focus)s; }
+    QLineEdit:disabled { background: %(disbg)s; color: %(dis)s; }
+    ''' % dict(bg=bg, border=border, text=text, focus=focus, dis=dis, disbg=disbg)
 
 
 def primary_active_qss(dark):

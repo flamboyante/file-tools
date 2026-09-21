@@ -15,12 +15,12 @@ import os
 import sys
 
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor, QPalette, QTextCharFormat
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTextEdit,
-                             QLineEdit, QSizePolicy)
+                             QLineEdit, QSizePolicy, QPushButton)
 
-from qfluentwidgets import (PushButton, PrimaryPushButton,
-                            CheckBox, FluentIcon as FIF,
-                            TransparentToolButton)
+from qfluentwidgets import (PrimaryPushButton, CheckBox,
+                            FluentIcon as FIF, TransparentToolButton)
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _ROOT not in sys.path:
@@ -83,7 +83,9 @@ class ConsoleApp(QDialog):
         tools = QHBoxLayout()
         tools.setSpacing(theme.GAP_SM)
         self.chk_hex = CheckBox('hex 显示')
-        self.btn_clear = PushButton(FIF.DELETE, '清屏')
+        # 清屏用原生 QPushButton + outline QSS（与 transfer 工具条同族；
+        # qfluentwidgets 自绘按钮套 QSS 会文字重影——已在 transfer 踩过）
+        self.btn_clear = QPushButton(self._icon(FIF.DELETE), '清屏')
         tools.addWidget(self.chk_hex, 0)
         tools.addWidget(self.btn_clear, 0)
         tools.addStretch(1)
@@ -96,11 +98,18 @@ class ConsoleApp(QDialog):
         self.input.returnPressed.connect(self._send_current)
         self.session.received.connect(self._append_bytes)
         self.session.opened.connect(
-            lambda: self._append_text('[√] 已连接 %s\n' % self.conn.current_port()))
+            lambda: self._append_text('[√] 已连接 %s\n' % self.conn.current_port(),
+                                      'done'))
         self.session.closed.connect(
-            lambda: self._append_text('[×] 已断开\n'))
+            lambda: self._append_text('[×] 已断开\n', 'skipped'))
         self.session.error.connect(
-            lambda m: self._append_text('[!] %s\n' % m))
+            lambda m: self._append_text('[!] %s\n' % m, 'failed'))
+
+    # ------------------------------------------------------------ 图标
+    def _icon(self, fif):
+        """按钮图标随主题着色（同 transfer：与按钮文字同族）。"""
+        return fif.icon(color=theme.BTN_ICON_D if self._dark
+                        else theme.BTN_ICON)
 
     # ------------------------------------------------------------ 收 / 发
     def _send_current(self):
@@ -116,20 +125,40 @@ class ConsoleApp(QDialog):
             text = ' '.join('%02X' % b for b in data) + '\n'
         else:
             text = data.decode('utf-8', 'replace')
-        self.out.moveCursor(self.out.textCursor().End)
-        self.out.insertPlainText(text)
+        self._insert(text, None)
 
-    def _append_text(self, text):
-        """UI 本地提示（连接/错误等），始终文本显示，不参与 hex 化。"""
-        self.out.moveCursor(self.out.textCursor().End)
-        self.out.insertPlainText(text)
-        # 环形截断：超过上限砍前 1/4，避免长跑内存膨胀
+    def _insert(self, text, kind=None):
+        """统一插入入口。
+
+        ⚠️ 必须每次显式 setCharFormat：QTextEdit 的光标会**残留上一次
+        的字符格式**——提示消息着色后再插入串口数据，数据会继承那个
+        颜色（实测量过的坑）。空 QTextCharFormat = 跟随 QSS 默认色。
+        """
+        cursor = self.out.textCursor()
+        cursor.movePosition(cursor.End)
+        fmt = QTextCharFormat()
+        if kind:
+            fmt.setForeground(QColor(theme.state_text(kind, self._dark)))
+        cursor.setCharFormat(fmt)
+        cursor.insertText(text)
+        self._trim_output()
+
+    def _append_text(self, text, kind=None):
+        """UI 本地提示（连接/错误等），始终文本显示，不参与 hex 化。
+
+        kind：状态语义色（'done' 绿 / 'failed' 红 / 'skipped' 灰）——
+        提示与串口数据同屏时，靠颜色一眼分辨"哪些是程序说的"。
+        """
+        self._insert(text, kind)
+
+    def _trim_output(self):
+        """环形截断：超过上限砍前 1/4，避免长跑内存膨胀。"""
         doc = self.out.document()
         if doc.blockCount() > OUT_MAX_BLOCKS:
-            cursor = self.out.textCursor()
-            cursor.movePosition(cursor.Start)
-            cursor.movePosition(cursor.Down, cursor.KeepAnchor, OUT_MAX_BLOCKS - OUT_TRIM_TO)
-            cursor.removeSelectedText()
+            c = self.out.textCursor()
+            c.movePosition(c.Start)
+            c.movePosition(c.Down, c.KeepAnchor, OUT_MAX_BLOCKS - OUT_TRIM_TO)
+            c.removeSelectedText()
 
     # ------------------------------------------------------------ 主题
     def toggle_theme(self):
@@ -141,13 +170,17 @@ class ConsoleApp(QDialog):
         self._dark = dark
         theme.apply_theme(self, dark)
         self.conn.set_dark(dark)
+        # 终端输出区：等宽优先（数字/十六进制对齐），深色下深卡
         self.out.setStyleSheet(
-            'QTextEdit{background:%s; color:%s; border:1px solid %s;'
-            'border-radius:%dpx; font-family:"%s","Consolas"; font-size:13px;}'
-            % (theme.C_CARD_D if dark else theme.C_CARD,
-               theme.C_TEXT_D if dark else theme.C_TEXT,
-               theme.C_GRAY_BG_D if dark else theme.C_GRAY_BG,
-               theme.R_CARD, theme.FONT_FAMILY))
+            theme.log_qss(dark, mono=True) + theme.scrollbar_qss(dark))
+        self.input.setStyleSheet(theme.line_edit_qss(dark))
+        self.btn_clear.setStyleSheet(theme.outline_button_qss(dark))
+        self.btn_clear.setIcon(self._icon(FIF.DELETE))
+        # placeholder 色 QSS 管不到，走 palette
+        pal = self.input.palette()
+        pal.setColor(QPalette.PlaceholderText,
+                     QColor(theme.C_TEXT_SUB_D if dark else theme.C_TEXT_SUB))
+        self.input.setPalette(pal)
         theme.fix_fonts(self)
 
     # ------------------------------------------------------------ 生命周期

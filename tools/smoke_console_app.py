@@ -88,14 +88,43 @@ def main():
     assert session2.send_command('x') is False
     print('5. 未打开拒发 OK')
 
-    # ---- 6. 主题切换 + 关窗清理
+    # ---- 6. 格式残留：提示着色后插入的串口数据不得继承颜色
+    # （QTextEdit 光标会保留上次 charFormat——实测坑，2026-09-21）
+    doc = win.out.document()
+
+    def _fg_of(needle):
+        """按内容定位 fragment 的前景色（不依赖块序号）。"""
+        blk = doc.begin()
+        while blk.isValid():
+            if needle in blk.text():
+                it = blk.begin()
+                while not it.atEnd():
+                    frag = it.fragment()
+                    if needle in frag.text():
+                        return frag.charFormat().foreground()
+                    it += 1
+            blk = blk.next()
+        return None
+
+    win._append_text('\n', None)
+    win._append_text('[!] 示例错误X\n', 'failed')
+    win._append_text('\n', None)
+    win._append_bytes(b'plain_dataX\n')
+    data_fg = _fg_of('plain_dataX')
+    assert data_fg is not None and data_fg.style() == Qt.NoBrush, \
+        '串口数据继承了提示颜色（格式残留）: %s' % (data_fg.color().name() if data_fg else '未找到')
+    err_fg = _fg_of('示例错误X')
+    assert err_fg is not None and err_fg.style() != Qt.NoBrush, '提示未着色'
+    print('6. 提示着色 + 格式不残留 OK')
+
+    # ---- 7. 主题切换 + 关窗清理
     win.toggle_theme()
     win.toggle_theme()
     r, w = link._reader, link._writer
     win.close()
     assert not session.is_open
     assert not r.isRunning() and not w.isRunning(), '关窗后线程未退出'
-    print('6. 主题切换 + 关窗清理 OK')
+    print('7. 主题切换 + 关窗清理 OK')
 
     print('SMOKE OK')
     QTimer.singleShot(0, app.quit)
