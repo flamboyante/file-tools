@@ -58,7 +58,18 @@ C_GRAY_BG_D    = '#252e3a'
 C_BUSY         = '#5b6b7b'   # 进行中（蓝灰，区别于主色蓝）
 C_BUSY_D       = '#9fb0bf'
 
+C_WARN         = '#b45309'   # 警告/需注意（琥珀）——2026-09-21 补的语义位
+C_WARN_D       = '#fbbf24'
+C_WARN_BG      = '#fef3c7'
+C_WARN_BG_D    = '#3a2a08'
+
+# 控件按钮的图标色（与暖米按钮底同族，避免暖底挂冷色图标）
+BTN_ICON_D     = '#ffe0a3'   # 深色（暖金）
+BTN_ICON       = '#1d4ed8'   # 浅色（与蓝描边同族）
+
 # 面板与文字
+# ⚠️ 深色值 2026-09-21 整体提亮一档：原 #0d1117/#161c26 过深，
+# 卡片与页底对比不足（用户反馈）。现在层次靠"亮度差"而非近黑。
 C_WINDOW       = '#eef2f9'   # 顶层窗口底
 C_WINDOW_D     = '#0d1117'
 C_CARD         = '#ffffff'   # 卡片底
@@ -88,16 +99,18 @@ STATE_STRIPE = {           # (浅色, 深色)
     'running': ('#3b82f6', '#4c8dff'),
     'done':    ('#10b981', '#2fc48a'),
     'failed':  ('#ef4444', '#f2555a'),
-    'pending': ('#94a3b8', '#64748b'),
-    'skipped': ('#cbd5e1', '#4a5561'),
+    'warn':    ('#f59e0b', '#fbbf24'),     # 警告/重试中（暖色位）
+    'pending': ('#94a3b8', '#7c8b9e'),
+    'skipped': ('#cbd5e1', '#4f5d6d'),
     'busy':    ('#60a5fa', '#7aa7ff'),
 }
 STATE_TEXT = {             # (浅色, 深色)——文字对比度 4.5:1+
     'running': ('#1d4ed8', '#7aa7ff'),
     'done':    ('#047857', '#34d399'),
     'failed':  ('#dc2626', '#fb7185'),
-    'pending': ('#64748b', '#8d99a8'),
-    'skipped': ('#94a3b8', '#5b6b7b'),
+    'warn':    ('#b45309', '#fbbf24'),
+    'pending': ('#64748b', '#9fb0bf'),
+    'skipped': ('#94a3b8', '#7c8b9e'),
     'busy':    ('#1d4ed8', '#7aa7ff'),
 }
 
@@ -114,12 +127,13 @@ def state_text(kind, dark):
 
 # ---------------------------------------------------------------- QSS 工厂
 def chip_style(kind, dark):
-    """胶囊样式。kind ∈ {blue, purple, green, red, gray}。"""
+    """胶囊样式。kind ∈ {blue, purple, green, red, gray, warn}。"""
     pal = {
         'blue':   (C_PRIMARY, C_PRIMARY_D, C_PRIMARY_BG, C_PRIMARY_BG_D),
         'purple': (C_PURPLE,  C_PURPLE_D,  C_PURPLE_BG,  C_PURPLE_BG_D),
         'green':  (C_GREEN,   C_GREEN_D,   C_GREEN_BG,   C_GREEN_BG_D),
         'red':    (C_RED,     C_RED_D,     C_RED_BG,     C_RED_BG_D),
+        'warn':   (C_WARN,    C_WARN_D,    C_WARN_BG,    C_WARN_BG_D),
         'gray':   (C_GRAY,    C_GRAY_D,    C_GRAY_BG,    C_GRAY_BG_D),
     }[kind]
     fg = pal[1] if dark else pal[0]
@@ -129,12 +143,13 @@ def chip_style(kind, dark):
 
 
 def badge_style(kind, dark):
-    """状态徽章样式。kind ∈ {ok, run, busy, err, gray}。"""
+    """状态徽章样式。kind ∈ {ok, run, busy, err, warn, gray}。"""
     pal = {
         'ok':   (C_GREEN, C_GREEN_D, C_GREEN_BG, C_GREEN_BG_D),
         'run':  (C_PRIMARY, C_PRIMARY_D, C_PRIMARY_BG, C_PRIMARY_BG_D),
         'busy': (C_BUSY,  C_BUSY_D,  C_GRAY_BG,   C_GRAY_BG_D),
         'err':  (C_RED,   C_RED_D,   C_RED_BG,    C_RED_BG_D),
+        'warn': (C_WARN,  C_WARN_D,  C_WARN_BG,   C_WARN_BG_D),
         'gray': (C_GRAY,  C_GRAY_D,  C_GRAY_BG,   C_GRAY_BG_D),
     }[kind]
     fg = pal[1] if dark else pal[0]
@@ -364,7 +379,7 @@ def primary_tint_qss(dark):
         color: %(fg)s;
         border: 1px solid %(border)s;
         border-radius: 7px;
-        padding: 6px 13px;
+        padding: 0 13px;
         font-weight: 600;
     }
     QPushButton:hover { border-color: %(fg)s; }
@@ -395,14 +410,20 @@ def table_button_qss(dark):
 
 
 def outline_button_qss(dark):
-    """工具条按钮（白底描边 + hover 淡蓝 + **pressed 下沉**）。"""
-    bg = _c(dark, C_CARD, '#1d2530')
-    border = _c(dark, '#cfd7e3', '#2a3442')
-    text = _c(dark, C_TEXT, C_TEXT_D)
-    hover_bg = _c(dark, '#eef4ff', '#1b2a47')
-    hover_border = _c(dark, '#8fb5ff', '#4c8dff')
-    press_bg = _c(dark, '#dbeafe', '#24365c')
-    press_border = _c(dark, '#6a9bf0', '#3b6fd4')
+    """工具条按钮：浅色**蓝描边**（白底 + 主色描边）/ 深色**暖米**。
+
+    浅色（2026-09-21 最终拍板）：白底 #ffffff + 蓝描边 #6a9bf0 + 蓝字
+    #1d4ed8 —— 幽灵按钮，清爽且与冷蓝主色系一致。
+    深色：暖米底 #33301f + 暖金字 #ffe0a3（与近黑页面形成冷暖对比）。
+    两套底色都刻意亮于所在页底，保证控件边界可见（对比度诉求）。
+    """
+    bg = _c(dark, '#ffffff', '#33301f')
+    border = _c(dark, '#6a9bf0', '#4f4931')
+    text = _c(dark, '#1d4ed8', '#ffe0a3')
+    hover_bg = _c(dark, '#eef4ff', '#3f3a25')
+    hover_border = _c(dark, '#4c8dff', '#6b6349')
+    press_bg = _c(dark, '#dbeafe', '#2a281a')
+    press_border = _c(dark, '#3b82f6', '#59522f')
     return '''
     QPushButton {
         background: %(bg)s;
@@ -416,8 +437,8 @@ def outline_button_qss(dark):
     QPushButton:disabled { color: %(dis)s; border-color: %(disbg)s; background: %(disbg)s; }
     ''' % dict(bg=bg, border=border, text=text, hb=hover_bg, hb2=hover_border,
                pb=press_bg, pb2=press_border,
-               dis=_c(dark, '#9aa6b5', '#5b6b7b'),
-               disbg=_c(dark, '#eef2f9', '#141a22'))
+               dis=_c(dark, '#9aa6b5', '#6b6349'),
+               disbg=_c(dark, '#eef2f9', '#242216'))
 
 
 def drop_area_qss(dark):

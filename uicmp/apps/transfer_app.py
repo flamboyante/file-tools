@@ -172,15 +172,19 @@ class TransferApp(QDialog):
         v.addLayout(self._wrap(self.conn))
 
         # ---- 工具条：左（动作组） ··· 右（策略）
+        # ⚠️ 这几个用**原生 QPushButton** 而不是 qfluentwidgets PushButton：
+        # qfluentwidgets 按钮是自绘的，套 QSS 会「自绘一次 + QSS 再画一次」
+        # → 文字重影（实测）。原生按钮 + QSS 是唯一干净的路。
+        # 图标经 FluentIcon.icon() 取 QIcon，视觉与库内一致。
         tools = QHBoxLayout()
         tools.setSpacing(theme.GAP_SM)
-        self.btn_add = PushButton(FIF.ADD, '添加')
-        self.btn_del_pending = PushButton('删除未开始')
-        self.btn_start = PrimaryPushButton(FIF.PLAY, '开始')
+        self.btn_add = QPushButton(self._icon(FIF.ADD), '添加')
+        self.btn_del_pending = QPushButton('删除未开始')
+        self.btn_start = PrimaryPushButton(FIF.PLAY, '开始')   # 主按钮留原生自绘
         # 暂停/继续 = 同一位置的双面按钮（省一个按钮、少一步认知）
-        self.btn_pause = PushButton(FIF.PAUSE, '暂停')
-        self.btn_stop = PushButton(FIF.CLOSE, '停止')
-        self.btn_lock = PushButton('锁定')
+        self.btn_pause = QPushButton(self._icon(FIF.PAUSE), '暂停')
+        self.btn_stop = QPushButton(self._icon(FIF.CLOSE), '停止')
+        self.btn_lock = QPushButton('锁定')
         for w in (self.btn_add, self.btn_del_pending, self.btn_start,
                   self.btn_pause, self.btn_stop, self.btn_lock):
             tools.addWidget(w)
@@ -248,12 +252,12 @@ class TransferApp(QDialog):
         if self._paused:
             self.queue.pause()
             self.btn_pause.setText('继续')
-            self.btn_pause.setIcon(FIF.PLAY)
+            self.btn_pause.setIcon(self._icon(FIF.PLAY))
             self.log('已暂停（当前帧完成后生效）')
         else:
             self.queue.resume()
             self.btn_pause.setText('暂停')
-            self.btn_pause.setIcon(FIF.PAUSE)
+            self.btn_pause.setIcon(self._icon(FIF.PAUSE))
             self.log('已继续')
 
     def _stop(self):
@@ -307,11 +311,7 @@ class TransferApp(QDialog):
     def _toggle_lock(self):
         self._locked = not self._locked
         self.btn_lock.setText('解锁' if self._locked else '锁定')
-        # 激活态：锁定后按钮变主色底（"点了之后有变化"的明确反馈）
-        if self._locked:
-            self.btn_lock.setStyleSheet(theme.primary_active_qss(self._dark))
-        else:
-            self.btn_lock.setStyleSheet('')
+        self._apply_toolbar_style()      # 锁定按钮切激活/普通样式
         self._refresh_table()
 
     # ------------------------------------------------------------ 调度
@@ -340,7 +340,7 @@ class TransferApp(QDialog):
             # 队列结束：暂停按钮复位成「暂停」面
             self._paused = False
             self.btn_pause.setText('暂停')
-            self.btn_pause.setIcon(FIF.PAUSE)
+            self.btn_pause.setIcon(self._icon(FIF.PAUSE))
 
     def _on_task_changed(self, idx):
         if idx < 0:
@@ -489,6 +489,33 @@ class TransferApp(QDialog):
                         if os.path.isfile(u.toLocalFile())])
 
     # ------------------------------------------------------------ 主题
+    def _icon(self, fif):
+        """工具条按钮图标：与暖米按钮同族的暖色（深色暖金 / 浅色暖褐金）。
+        不这么做的话暖底上会挂着蓝/黑图标，和文字不同族（跳）。"""
+        return fif.icon(color=theme.BTN_ICON_D if self._dark else theme.BTN_ICON)
+
+    def _apply_toolbar_style(self):
+        """工具条非主按钮统一切到 outline QSS。
+
+        ⚠️ 为什么不用 qfluentwidgets 原生按钮的深色默认样式：它的底色是
+        半透明白（几乎与页底同色），深色下按钮"糊"在背景里、边界不可见
+        （用户反馈"按钮对比度不够"）。outline QSS 的底色/边框由我们
+        控制，深浅两套都有明确边界 + 三态（hover/pressed/disabled）。
+        深色底=暖米（拍板），故图标同步换暖金色。
+        """
+        qss = theme.outline_button_qss(self._dark)
+        for w in (self.btn_add, self.btn_del_pending, self.btn_pause,
+                  self.btn_stop):
+            w.setStyleSheet(qss)
+        # 锁定按钮有激活态，单独判
+        self.btn_lock.setStyleSheet(
+            theme.primary_active_qss(self._dark) if self._locked else qss)
+        # 图标随主题着色（锁定/解锁态都是同一按钮，图标无）
+        self.btn_add.setIcon(self._icon(FIF.ADD))
+        self.btn_stop.setIcon(self._icon(FIF.CLOSE))
+        paused_fif = FIF.PLAY if self._paused else FIF.PAUSE
+        self.btn_pause.setIcon(self._icon(paused_fif))
+
     def apply_theme(self, dark):
         """⚠️ 约定：任何控件重建之后都要重调本函数。
         表格单元格内的 combo/进度条/按钮在 _refresh_table 重建时按当时
@@ -496,6 +523,7 @@ class TransferApp(QDialog):
         self._dark = dark
         theme.apply_theme(self, dark)
         self.conn.set_dark(dark)
+        self._apply_toolbar_style()
         self.table.setStyleSheet(
             theme.table_qss(dark) + theme.scrollbar_qss(dark))
         self.drop_area.setStyleSheet(theme.drop_area_qss(dark))

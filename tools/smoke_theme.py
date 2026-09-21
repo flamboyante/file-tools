@@ -56,7 +56,8 @@ def main():
     for dark in (False, True, False, True):
         theme.apply_theme(w, dark)
         bg = _card_bg(w.card)
-        expect = '#161c26' if dark else '#ffffff'
+        # 期望值从 theme 取（避免色板调整后测试写死过期）
+        expect = theme.C_CARD_D if dark else theme.C_CARD
         assert bg == expect, '卡片底色不符: dark=%s got=%s want=%s' % (dark, bg, expect)
         assert 'background' in w.styleSheet(), '窗口 QSS 缺背景'
         print('dark=%-5s card_bg=%s  label_font=%s' % (dark, bg, w.lb.font().family()))

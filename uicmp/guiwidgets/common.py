@@ -38,7 +38,9 @@ class ConnectionBar(QWidget):
         self.combo_baud = ComboBox()
         self.combo_baud.addItems(bauds)
         self.btn_open = PrimaryPushButton('打开')
-        self.btn_open.setFixedWidth(88)
+        # ⚠️ 固定尺寸：原生自绘（32px）与 QSS tint 态（33px）高度算法不同，
+        # 不固定的话「打开」⇄「断开」切换时按钮会跳 1px（实测 bug）
+        self.btn_open.setFixedSize(88, 32)
         self.badge = badge('未连接', 'gray', dark)
 
         lay.addWidget(self.combo_port, 0)
