@@ -31,10 +31,13 @@ PARITY_ITEMS = [('无校验 (N)', 'N'), ('奇校验 (O)', 'O'), ('偶校验 (E)'
 
 
 class StatusDelegate(QStyledItemDelegate):
-    """状态列 delegate：默认绘制文字，左缘画 3px 圆角色条（颜色即状态）。
+    """状态列/行 delegate：左缘 3px 圆角色条（颜色即状态），可选整行淡底色。
 
     kind 从 `index.data(Qt.UserRole)` 取（'running'/'done'/'failed'/'warn'/
     'pending'/'skipped'），颜色取自 theme.STATE_STRIPE。
+
+    row_tint=True：给整行铺一层该状态的**淡色底**（每行的颜色差异＝状态差异），
+    用于"一眼分出哪条在跑/完成/失败"。淡色底用 state_bg（浅色 50 / 深色 800）。
 
     ⚠️ 为什么用 delegate 而不是列内 widget/item 背景：
     ① item.setBackground 会被 QSS ::item 规则**静默忽略**（不画）
@@ -42,16 +45,29 @@ class StatusDelegate(QStyledItemDelegate):
     delegate 的 paint 在 opt.rect 上直接画，不受这两者影响（实测结论）。
     """
 
-    def __init__(self, get_dark, parent=None):
+    def __init__(self, get_dark, row_tint=False, stripe_col=None, parent=None):
         super(StatusDelegate, self).__init__(parent)
         self._get_dark = get_dark
+        self.row_tint = row_tint
+        self.stripe_col = stripe_col
 
     def paint(self, painter, opt, index):
-        super(StatusDelegate, self).paint(painter, opt, index)
+        dark = self._get_dark()
         kind = index.data(Qt.UserRole)
+        if kind and self.row_tint:
+            painter.save()
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QBrush(QColor(theme.state_bg(kind, dark))))
+            painter.drawRect(opt.rect)
+            painter.restore()
+        super(StatusDelegate, self).paint(painter, opt, index)
         if not kind:
             return
-        color = QColor(theme.state_stripe(kind, self._get_dark()))
+        # ⚠️ 整表共用 delegate 时，色条只画在 stripe_col 列上——
+        # 否则每一列的左缘都会画一条，整行变成"多条竖线"
+        if self.stripe_col is not None and index.column() != self.stripe_col:
+            return
+        color = QColor(theme.state_stripe(kind, dark))
         r = opt.rect
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing, True)

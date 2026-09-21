@@ -47,9 +47,9 @@ def main():
     ses.open_channel(CHAN_A)
     ses.open_channel('B')
     spin(app, 0.2)
-    assert w.bus[CHAN_A]._btn.text() == '关闭', w.bus[CHAN_A]._btn.text()
-    assert w.bus[CHAN_A]._badge.text() == '已连接'
-    print('2. 双通道打开 OK（按钮/徽章同步）')
+    assert w.bus[CHAN_A]._sw.isChecked(), '开关未同步'
+    assert '已开启' in w.bus[CHAN_A]._lb.text(), w.bus[CHAN_A]._lb.text()
+    print('2. 双通道打开 OK（小开关/状态文字同步）')
 
     # ---- 3. 通道 Tab（v3：一次只看一个通道）
     w._switch_tab('A')
@@ -141,6 +141,23 @@ def main():
     spin(app, 0.1)
     assert len(ses.commands(CHAN_A)) == 8
     print('8. 复制/删除 OK（副本禁用；删除带确认）')
+
+    # ---- 8.5 保存 / 恢复 / 弹出监视窗
+    w._save()
+    from PyQt5.QtCore import QSettings
+    raw = QSettings('JiangCan', 'gui-ng').value('canapp/commands', '', type=str)
+    assert raw, '配置未落盘'
+    assert 'STAR' in raw, raw[:80]
+    w._pop_monitor()
+    spin(app, 0.2)
+    assert w._mon_dock is not None
+    w._mon_dock.close()
+    spin(app, 0.2)
+    assert w._mon_dock is None, '收回失败'
+    print('8.5 保存配置 + 弹出/收回监视窗 OK')
+
+    # ---- 8.6 清理测试留下的保存配置（避免污染真机首启）
+    QSettings('JiangCan', 'gui-ng').remove('canapp/commands')
 
     # ---- 9. 主题往返 + 关窗清理
     w.toggle_theme()

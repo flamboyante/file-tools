@@ -125,6 +125,25 @@ def state_text(kind, dark):
     return b if dark else a
 
 
+# 状态淡底色（浅色 / 深色）——行 tint 用：每行的颜色差异＝状态差异。
+# 与 STATE_STRIPE 同族但压到"底"的明度，避免盖住文字。
+STATE_BG = {           # (浅色, 深色)
+    'running': ('#e8f1ff', '#1c3557'),
+    'done':    ('#e7f6ee', '#17352a'),
+    'failed':  ('#fdeaea', '#3d2022'),
+    'warn':    ('#fdf3e3', '#3a2f18'),
+    'pending': ('#f2f4f8', '#212a35'),
+    'skipped': ('#f5f6f8', '#1c242e'),
+    'busy':    ('#eef2f9', '#232d3a'),
+}
+
+
+def state_bg(kind, dark):
+    """状态淡底色（行 tint）——配合 state_stripe 的色条使用。"""
+    a, b = STATE_BG.get(kind, STATE_BG['pending'])
+    return b if dark else a
+
+
 # ---------------------------------------------------------------- QSS 工厂
 def chip_style(kind, dark):
     """胶囊样式。kind ∈ {blue, purple, green, red, gray, warn}。"""

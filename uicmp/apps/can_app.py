@@ -16,13 +16,15 @@
 """
 import os
 import sys
+import json
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor, QTextCharFormat
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTableWidget,
                              QTableWidgetItem, QHeaderView, QAbstractItemView,
                              QTextEdit, QLabel, QPushButton, QFrame, QSpinBox,
-                             QSizePolicy, QMessageBox)
+                             QSizePolicy, QMessageBox, QSplitter, QWidget,
+                             QLineEdit, QFormLayout)
 
 from qfluentwidgets import (PrimaryPushButton, CheckBox, ComboBox,
                             SwitchButton, TransparentToolButton,
@@ -41,6 +43,8 @@ from uicmp.guiwidgets.common import StatusDelegate
 (COL_SW, COL_NAME, COL_CH, COL_ID, COL_DATA, COL_INTV,
  COL_CNT, COL_ST, COL_SEND) = range(9)
 COL_COUNT = 9
+
+CFG_KEY = 'canapp/commands'
 
 MON_MAX_BLOCKS = 1200
 MON_TRIM_TO = 900
@@ -77,12 +81,17 @@ class CanApp(QDialog):
         self._expanded = set()          # 展开帧明细的指令 id
         self._selected = None           # 当前选中指令
         self._cur_ch = CHAN_A           # 当前通道 Tab（一次只看一个通道）
+        from PyQt5.QtCore import QSettings
+        self._qs = QSettings('JiangCan', 'gui-ng')
         self._mon_paused = False
         self.setObjectName('CanApp')
         self.setWindowTitle('CAN 指令台 · gui-ng')
         self.resize(980, 760)
         self._build()
+        restored = self._load_saved()
         self.apply_theme(False)
+        if restored:
+            self._mon('SYS', '已恢复上次保存的指令配置')
 
     # ------------------------------------------------------------ UI
     def _build(self):
@@ -90,13 +99,30 @@ class CanApp(QDialog):
         v.setContentsMargins(16, 14, 16, 14)
         v.setSpacing(theme.GAP)
 
-        # ---- 总线区（A / B 两张卡）
+        # ---- 上下分区：QSplitter 让监视区大小可拖（也可整块弹出为独立窗）
+        self.splitter = QSplitter(Qt.Vertical)
+        self.splitter.setChildrenCollapsible(False)
+        self.upper = QWidget()
+        self.upper.setLayout(QVBoxLayout())
+        self.upper.layout().setContentsMargins(0, 0, 0, 0)
+        self.upper.layout().setSpacing(theme.GAP)
+        uv = self.upper.layout()
+        self.splitter.addWidget(self.upper)
+        self.splitter.addWidget(self._build_monitor())
+        self.splitter.setStretchFactor(0, 3)
+        self.splitter.setStretchFactor(1, 1)
+        v.addWidget(self.splitter, 1)
+        self._main = v          # 主布局（底部统计条用）
+        v = uv                  # 后续控件放进上半区
+
+        # ---- 总线区（A / B 两张卡：只留 通道徽章 + 状态 + 小开关）
         bus = QHBoxLayout()
-        bus.setSpacing(theme.GAP)
+        bus.setSpacing(theme.GAP_SM)
         self.bus = {}
         for ch, kind in ((CHAN_A, 'blue'), (CHAN_B, 'purple')):
             self.bus[ch] = self._make_bus_card(ch, kind)
-            bus.addWidget(self.bus[ch], 1)
+            bus.addWidget(self.bus[ch], 0)
+        bus.addStretch(1)
         v.addLayout(bus)
 
         # ---- 工具条
@@ -112,11 +138,15 @@ class CanApp(QDialog):
         self.combo_preset.addItems(['预设指令 ▾'] +
                                    [c.name for c in PRESETS_A] +
                                    [c.name for c in PRESETS_B])
+        self.btn_save = QPushButton('保存')
+        self.btn_add = QPushButton('添加')      # 添加新指令（放最前）
         self.btn_import = QPushButton('导入')
         self.btn_export = QPushButton('导出')
+        self.btn_reset = QPushButton('恢复预设')
         for w in (self.btn_add, self.btn_copy, self.btn_del,
                   self.btn_up, self.btn_down, self.combo_preset,
-                  self.btn_import, self.btn_export):
+                  self.btn_save, self.btn_import, self.btn_export,
+                  self.btn_reset):
             tools.addWidget(w, 0)
         tools.addStretch(1)
         self.btn_theme = TransparentToolButton(FIF.CONSTRACT)
@@ -149,8 +179,10 @@ class CanApp(QDialog):
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(38)
         self.table.horizontalHeader().setFixedHeight(34)
-        self.table.setItemDelegateForColumn(
-            COL_ST, StatusDelegate(lambda: self._dark))
+        # 整表共用一个 delegate：行底色＝状态色（每行颜色有差异），
+        # 强色条只画在状态列（stripe_col），否则每列左缘都会画一条
+        self.table.setItemDelegate(StatusDelegate(
+            lambda: self._dark, row_tint=True, stripe_col=COL_ST))
         self.table.horizontalHeader().setSectionResizeMode(
             COL_NAME, QHeaderView.Stretch)
         for col, w in ((COL_SW, 46), (COL_CH, 54), (COL_ID, 104),
@@ -175,7 +207,16 @@ class CanApp(QDialog):
         run.addWidget(self.lb_info, 0)
         v.addLayout(run)
 
-        # ---- 监视（v3：通道/方向是按钮组，可同时开；不是下拉）
+        # ---- 底部统计条（放主窗口最下，不属于监视区）
+        self._main.addLayout(self._make_bottombar())
+        self._wire()
+
+    def _build_monitor(self):
+        """监视区（独立 widget：可随 splitter 拖动，也可整块弹出成独立窗）。"""
+        box = QWidget()
+        v = QVBoxLayout(box)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(6)
         mon_row = QHBoxLayout()
         mon_row.setSpacing(6)
         mon_row.addWidget(self._label('监视'), 0)
@@ -202,18 +243,44 @@ class CanApp(QDialog):
         mon_row.addStretch(1)
         self.btn_pause_mon = QPushButton('暂停')
         self.btn_clear_mon = QPushButton('清空')
+        self.btn_pop_mon = QPushButton('弹出')
+        self.btn_pop_mon.setToolTip('把监视区挪出来成为独立窗口')
         mon_row.addWidget(self.btn_pause_mon, 0)
         mon_row.addWidget(self.btn_clear_mon, 0)
+        mon_row.addWidget(self.btn_pop_mon, 0)
         v.addLayout(mon_row)
 
         self.mon = QTextEdit()
         self.mon.setReadOnly(True)
         v.addWidget(self.mon, 1)
 
-        # ---- 底部统计条（v3 bottombar）：TX·A / TX·B / RX 总数 / 应答中 / 错误 + 图例
-        v.addLayout(self._make_bottombar())
+        self.mon_widget = box       # 供弹出/收回时 reparent
+        return box
 
-        self._wire()
+    def _pop_monitor(self):
+        """监视区弹出为独立窗口（同一个 widget，日志不丢）。"""
+        if getattr(self, '_mon_dock', None) is None:
+            dock = QDialog(self)
+            dock.setWindowTitle('收发监视 · CAN')
+            lay = QVBoxLayout(dock)
+            lay.setContentsMargins(8, 8, 8, 8)
+            dock.resize(760, 460)
+            dock.finished.connect(self._dock_monitor)
+            self._mon_dock = dock
+        self.mon_widget.setParent(self._mon_dock)
+        self._mon_dock.layout().addWidget(self.mon_widget)
+        self.btn_pop_mon.setText('收回')
+        self._mon_dock.show()
+        self._mon_dock.raise_()
+
+    def _dock_monitor(self):
+        """收回监视区到主窗口的 splitter 下半。"""
+        if getattr(self, '_mon_dock', None) is None:
+            return
+        self.mon_widget.setParent(self.splitter)
+        self.splitter.addWidget(self.mon_widget)
+        self.btn_pop_mon.setText('弹出')
+        self._mon_dock = None
 
     def _make_bottombar(self):
         """底部统计卡 + 色系图例（TX/RX/ERR 统一放这里，不放总线卡内）。"""
@@ -294,35 +361,49 @@ class CanApp(QDialog):
         return lb
 
     def _make_bus_card(self, ch, kind):
-        """总线卡：通道徽章 + 开关按钮 + 状态徽章 + 统计。"""
+        """总线卡（精简）：通道徽章 + 状态文字 + **小开关**。
+
+        不再摆波特率/打开按钮/徽章/统计——通道区只回答"开没开、能不能开"，
+        统计统一在底部 bottombar（按 v3）。
+        """
         card = QFrame()
         card.setObjectName('busCard')
         lay = QHBoxLayout(card)
-        lay.setContentsMargins(12, 10, 12, 10)
+        lay.setContentsMargins(10, 6, 10, 6)
         lay.setSpacing(8)
 
-        chip = theme.chip('通道 %s' % ch, kind, self._dark)
+        chip = theme.chip(ch, kind, self._dark)      # 只显示 A / B
         lay.addWidget(chip, 0)
 
-        lb_baud = QLabel('500K')
-        lb_baud.setStyleSheet('color: %s;' % (theme.C_TEXT_SUB_D if self._dark
-                                              else theme.C_TEXT_SUB))
-        lay.addWidget(lb_baud, 0)
+        lb = QLabel('○ 已关闭')
+        lay.addWidget(lb, 0)
 
-        btn = PrimaryPushButton('打开')
-        btn.setFixedSize(76, 30)
-        lay.addWidget(btn, 0)
+        sw = SwitchButton()
+        sw.setOnText('')        # ⚠️ 1.11.x 默认带 On/Off 文本，必须关掉
+        sw.setOffText('')
+        sw.setFixedWidth(40)
+        sw.setFixedHeight(20)
+        sw.checkedChanged.connect(lambda on: self._set_bus(ch, on))
+        lay.addWidget(sw, 0)
 
-        badge = theme.badge('未连接', 'gray', self._dark)
-        lay.addWidget(badge, 0)
-
-        lay.addStretch(1)
-        # ⚠️ TX/RX/ERR 不放在这里——按 v3 设计统一收进底部 bottombar 统计卡
         card._chip = chip
-        card._btn = btn
-        card._badge = badge
-        btn.clicked.connect(lambda: self._toggle_bus(ch))
+        card._lb = lb
+        card._sw = sw
+        self._paint_bus_state(card, False)
         return card
+
+    def _set_bus(self, ch, on):
+        """小开关：开→打开通道，关→关闭通道。"""
+        if on:
+            self.session.open_channel(ch)
+        else:
+            self.session.close_channel(ch)
+
+    def _paint_bus_state(self, card, opened):
+        card._lb.setText('● 已开启' if opened else '○ 已关闭')
+        card._lb.setStyleSheet(
+            'color: %s;' % (theme.state_text('done' if opened else 'skipped',
+                                             self._dark)))
 
     def _wire(self):
         s = self.session
@@ -339,6 +420,11 @@ class CanApp(QDialog):
         self.btn_stop.clicked.connect(self.session.stop_sending)
         self.btn_clear_mon.clicked.connect(self.mon.clear)
         self.btn_pause_mon.clicked.connect(self._toggle_pause_mon)
+        self.btn_pop_mon.clicked.connect(self._toggle_pop_mon)
+        self.btn_save.clicked.connect(self._save)
+        self.btn_reset.clicked.connect(self._reset)
+        # 任何改动自动落盘（下次打开还在）
+        s.commandsChanged.connect(self._autosave)
         self.table.itemSelectionChanged.connect(self._on_select)
         self.table.cellDoubleClicked.connect(self._on_dbl)
         self.table.cellClicked.connect(self._on_cell_click)
@@ -355,28 +441,14 @@ class CanApp(QDialog):
         self._mon('SYS', '提示：打开通道 → 启用指令 → 开始发送；双击行看帧明细')
 
     # ------------------------------------------------------------ 总线
-    def _toggle_bus(self, ch):
-        s = self.session
-        if s.is_open(ch):
-            s.close_channel(ch)
-        else:
-            s.open_channel(ch)
-
     def _on_bus_state(self, ch, opened, msg):
+        """通道状态变化：同步小开关（用 blockSignals 避免回环触发）。"""
         card = self.bus[ch]
-        # 重建徽章与按钮态
-        kind = 'ok' if opened else 'gray'
-        new_badge = theme.badge('已连接' if opened else '未连接', kind, self._dark)
-        lay = card.layout()
-        lay.replaceWidget(card._badge, new_badge)
-        card._badge.deleteLater()
-        card._badge = new_badge
-
-        card._btn.setText('关闭' if opened else '打开')
-        if opened:
-            card._btn.setStyleSheet(theme.primary_tint_qss(self._dark))
-        else:
-            card._btn.setStyleSheet('')
+        sw = card._sw
+        sw.blockSignals(True)
+        sw.setChecked(opened)
+        sw.blockSignals(False)
+        self._paint_bus_state(card, opened)
         self._mon('SYS', '通道 %s：%s' % (ch, msg))
         self._refresh_stats()
 
@@ -453,12 +525,16 @@ class CanApp(QDialog):
         t.setItem(row, COL_INTV, QTableWidgetItem('%dms' % c.interval_ms))
         t.setItem(row, COL_CNT, QTableWidgetItem('∞' if c.is_infinite else str(c.count)))
 
-        # 状态（色条 kind + 文字）
+        # 状态（色条 kind + 文字）——kind 同时写到所有列，供行底色 delegate 取
         kind, text = self._state_of(c)
         st = QTableWidgetItem(text)
         st.setForeground(QColor(theme.state_text(kind, self._dark)))
         st.setData(Qt.UserRole, kind)
         t.setItem(row, COL_ST, st)
+        for col in (COL_NAME, COL_CH, COL_ID, COL_DATA, COL_INTV, COL_CNT):
+            it = t.item(row, col)
+            if it is not None:
+                it.setData(Qt.UserRole, kind)
 
         btn = QPushButton('单发')
         btn.setStyleSheet(theme.table_action_qss(self._dark))
@@ -653,6 +729,52 @@ class CanApp(QDialog):
                     c.frames = [CanFrame(fid, data[:8])]
             self.session.commandsChanged.emit()
 
+    # ------------------------------------------------------------ 保存
+    def _save(self):
+        """显式保存：把当前指令表写到本地配置（下次打开自动恢复）。"""
+        self._autosave()
+        self._mon('SYS', '配置已保存（%d 条：A%d + B%d）'
+                  % (len(self.session.all_commands()),
+                     len(self.session.commands(CHAN_A)),
+                     len(self.session.commands(CHAN_B))))
+
+    def _autosave(self):
+        try:
+            import json
+            self._qs.setValue(CFG_KEY, json.dumps(self.session.serialize()))
+        except Exception:
+            pass
+
+    def _load_saved(self):
+        """启动时恢复上次保存的配置；没有就保持出厂预设。"""
+        import json
+        raw = self._qs.value(CFG_KEY, '', type=str)
+        if not raw:
+            return False
+        try:
+            self.session.deserialize(json.loads(raw))
+            return True
+        except Exception:
+            return False
+
+    def _reset(self):
+        """恢复出厂预设（会清掉已保存的配置）。"""
+        if QMessageBox.question(self, '恢复预设',
+                                '恢复出厂预设指令？当前配置将被覆盖。',
+                                QMessageBox.Yes | QMessageBox.No,
+                                QMessageBox.No) != QMessageBox.Yes:
+            return
+        self.session.load_presets()
+        self._qs.remove(CFG_KEY)
+        self._mon('SYS', '已恢复出厂预设')
+
+    def _toggle_pop_mon(self):
+        """监视区 弹出 ⇄ 收回。"""
+        if getattr(self, '_mon_dock', None) is None:
+            self._pop_monitor()
+        else:
+            self._mon_dock.close()      # 触发 finished → _dock_monitor
+
     def _export(self):
         import json
         from PyQt5.QtWidgets import QFileDialog
@@ -779,6 +901,7 @@ class CanApp(QDialog):
         qss = theme.outline_button_qss(dark)
         for b in (self.btn_add, self.btn_copy, self.btn_del, self.btn_up,
                   self.btn_down, self.btn_import, self.btn_export,
+                  self.btn_save, self.btn_reset,
                   self.btn_stop, self.btn_clear_mon):
             b.setStyleSheet(qss)
         # 过滤按钮组（勾选=主色激活，未勾选=描边）
@@ -802,8 +925,7 @@ class CanApp(QDialog):
             card.layout().replaceWidget(old, new)
             old.deleteLater()
             card._chip = new
-            if self.session.is_open(ch):
-                card._btn.setStyleSheet(theme.primary_tint_qss(dark))
+            self._paint_bus_state(card, self.session.is_open(ch))
         self._refresh_table()
         theme.fix_fonts(self)
 
