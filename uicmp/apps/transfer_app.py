@@ -163,7 +163,9 @@ class TransferApp(QDialog):
         v.setContentsMargins(16, 14, 16, 14)
         v.setSpacing(theme.GAP)
 
-        self.conn = ConnectionBar(self.link, dark=False)
+        self.conn = ConnectionBar(self.link, dark=False,
+                                    settings_key='transfer',
+                                    default_preset='SC 422')   # 文件传输走 SC 422
         self.link.opened.connect(
             lambda: self.log('[√] 已连接'))
         self.link.closed.connect(

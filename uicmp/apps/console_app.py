@@ -56,7 +56,9 @@ class ConsoleApp(QDialog):
         # ---- 连接条（共用组件）+ 主题按钮
         conn = QHBoxLayout()
         conn.setSpacing(theme.GAP_SM)
-        self.conn = ConnectionBar(self.session.link, dark=self._dark)
+        self.conn = ConnectionBar(self.session.link, dark=self._dark,
+                                      settings_key='console',
+                                      default_preset='BMU debug')
         conn.addWidget(self.conn, 1)
         self.btn_theme = TransparentToolButton(FIF.CONSTRACT)
         self.btn_theme.setToolTip('浅/深主题')
