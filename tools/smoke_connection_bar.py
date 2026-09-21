@@ -112,10 +112,22 @@ def main():
     assert bar3.combo_preset.currentText() == '自定义'
     print('6. 非列表波特率持久化恢复 OK（250000 / 自定义）')
 
-    # ---- 7. 收尾：清理测试留下的配置
+    # ---- 7. 创建时同步链路既有状态
+    # （链路可能在 bar 创建前就打开——只连信号会显示成未连接，实测 bug）
+    class _OpenLink(FakeLink):
+        def __init__(self):
+            super(_OpenLink, self).__init__()
+            self.is_open = True
+
+    bar4 = ConnectionBar(_OpenLink(), settings_key='_smoke')
+    assert bar4.btn_open.text() == '断开', bar4.btn_open.text()
+    assert bar4.badge.text() == '已连接', bar4.badge.text()
+    print('7. 初始状态同步 OK（已打开链路 → 断开/已连接）')
+
+    # ---- 8. 收尾：清理测试留下的配置
     for k in ('preset', 'baud', 'parity', 'port'):
         qs.remove(KEY_BASE + '/' + k)
-    print('7. 测试配置已清理 OK')
+    print('8. 测试配置已清理 OK')
     print('SMOKE OK')
 
 

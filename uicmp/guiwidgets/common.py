@@ -88,6 +88,19 @@ class ConnectionBar(QWidget):
         self._link.error.connect(self._on_error)
         self.refresh_ports()
         self._load_settings()
+        self._sync_state()
+
+    def _sync_state(self):
+        """按链路当前状态对齐按钮/徽章。
+
+        ⚠️ 必须做：链路可能在 ConnectionBar 创建**之前**就已打开
+        （注入已打开的 link / 多页共享链路），此时 opened 信号早发过了，
+        只连信号会导致「已连接」的链路显示成未连接（实测 bug）。
+        """
+        if self._link.is_open:
+            self._on_opened()
+        else:
+            self._on_closed()
 
     # ------------------------------------------------------------ 参数
     def parity_code(self):

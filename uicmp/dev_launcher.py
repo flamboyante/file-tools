@@ -43,7 +43,7 @@ class DevLauncher(QDialog):
         grid.setSpacing(theme.GAP)
         self._btn_console = self._make_card(grid, '控制台', FIF.CONNECT, self._open_console)
         self._btn_transfer = self._make_card(grid, '文件传输', FIF.DOWNLOAD, self._open_transfer)
-        self._btn_sc422 = self._make_card(grid, 'SC422', FIF.SEND, None)
+        self._btn_sc422 = self._make_card(grid, 'SC422', FIF.SEND, self._open_sc422)
         self._btn_debug = self._make_card(grid, 'CAN', FIF.ROBOT, None)
         v.addLayout(grid)
         v.addStretch(1)
@@ -83,6 +83,16 @@ class DevLauncher(QDialog):
         if w is None or not w.isVisible():
             w = TransferApp()
             self._windows['transfer'] = w
+        w.show()
+        w.raise_()
+        w.activateWindow()
+
+    def _open_sc422(self):
+        from uicmp.apps.sc422_app import Sc422App
+        w = self._windows.get('sc422')
+        if w is None or not w.isVisible():
+            w = Sc422App()
+            self._windows['sc422'] = w
         w.show()
         w.raise_()
         w.activateWindow()
