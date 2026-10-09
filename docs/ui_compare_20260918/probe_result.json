@@ -1,0 +1,24 @@
+{
+ "log": [
+  "[      0ms] start, python 3.8.18",
+  "[     13ms] PyQt5 dir = C:\\hkj\\anaconda3\\envs\\pyqt_side_all_0328\\lib\\site-packages\\PyQt5",
+  "[    154ms] import QtWebEngineWidgets OK -> C:\\hkj\\anaconda3\\envs\\pyqt_side_all_0328\\lib\\site-packages\\PyQt5\\QtWebEngineWidgets.pyd",
+  "[    156ms] creating QApplication",
+  "[   1038ms] QApplication OK",
+  "[   1040ms] creating QWebEngineView",
+  "[   1043ms] QWebEngineView OK",
+  "[   1044ms] loading C:\\heike\\md\\pythonProjectV3.3.0_beta\\exp\\ui_compare\\card_page.html",
+  "[   2657ms] loadProgress 0%",
+  "[   2813ms] loadProgress 100%",
+  "[  47141ms] HARD TIMEOUT, loaded=False pct=100",
+  "[  47630ms] QtWebEngineProcess count = 3",
+  "[  47650ms] total elapsed 47650ms"
+ ],
+ "result": {
+  "stage": "done",
+  "loaded": false,
+  "pct": 100,
+  "procs": 3,
+  "total_ms": 47652.0
+ }
+}

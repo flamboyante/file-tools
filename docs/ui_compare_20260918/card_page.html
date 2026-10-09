@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>B 方案 · 指令卡片</title>
+<style>
+  :root{
+    --bg:#f3f6fb; --card:#ffffff; --border:#dfe7f1;
+    --text:#1d2633; --muted:#7c8798; --blue:#2f6fed;
+    --blue-bg:#e9f0ff; --radius:12px;
+    --shadow:0 1px 2px rgba(16,32,64,.06), 0 4px 12px rgba(16,32,64,.06);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);
+    font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC",sans-serif;
+    font-size:13px;color:var(--text);}
+  #wrap{padding:16px;display:flex;flex-direction:column;gap:10px;}
+  #head{font-size:14px;font-weight:500;}
+  #list{display:flex;flex-direction:column;gap:8px;
+        overflow-y:auto;height:calc(100vh - 96px);padding-right:12px;}
+  .card{display:flex;align-items:center;gap:10px;
+        height:64px;padding:8px 14px;
+        background:var(--card);border:1px solid var(--border);
+        border-radius:var(--radius);box-shadow:var(--shadow);
+        transition:box-shadow .18s ease, border-color .18s ease;}
+  .card:hover{box-shadow:0 2px 4px rgba(16,32,64,.08), 0 8px 24px rgba(16,32,64,.10);
+              border-color:#8fb5ff;}
+  .col{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;}
+  .name{font-weight:500;}
+  .meta{color:var(--muted);font-size:12px;}
+  .chip{padding:4px 12px;border-radius:999px;
+        background:var(--blue-bg);color:var(--blue);
+        font-size:12px;border:1px solid #cddffd;white-space:nowrap;}
+  .sw{width:40px;height:20px;border-radius:999px;background:#c3cfdd;
+      position:relative;cursor:pointer;transition:background .18s ease;flex:none;}
+  .sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;
+      border-radius:50%;background:#fff;transition:transform .18s ease;
+      box-shadow:0 1px 2px rgba(0,0,0,.2);}
+  .sw.on{background:var(--blue);}
+  .sw.on::after{transform:translateX(20px);}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="head">B 方案 · WebEngine 基准</div>
+  <div id="list"></div>
+</div>
+
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script>
+var bridge = null;
+var cards = [];
+
+new QWebChannel(qt.webChannelTransport, function (channel) {
+  bridge = channel.objects.bridge;
+  bridge.ready();
+});
+
+function buildCards(n) {
+  var t0 = performance.now();
+  var list = document.getElementById('list');
+  var frag = document.createDocumentFragment();
+  cards = [];
+  for (var i = 0; i < n; i++) {
+    var d = document.createElement('div');
+    d.className = 'card';
+    d.innerHTML =
+      '<div class="col"><div class="name">指令 ' + String(i).padStart(3, '0') + '</div>' +
+      '<div class="meta">500ms · 3 帧 · ID 0x1E180000</div></div>' +
+      '<div class="chip">A 通道</div><div class="sw"></div>';
+    frag.appendChild(d);
+    cards.push(d);
+  }
+  list.appendChild(frag);
+  // 强制布局，确保计时含真实排版
+  void list.offsetHeight;
+  var ms = performance.now() - t0;
+  if (bridge) bridge.report('build', ms);
+  return ms;
+}
+
+function burstText(rounds) {
+  var t0 = performance.now();
+  for (var r = 0; r < rounds; r++) {
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i];
+      c.querySelector('.name').textContent = '指令 ' + String(i).padStart(3, '0') + ' · 第 ' + r + ' 轮';
+      c.querySelector('.meta').textContent = '500ms · ' + (3 + r) + ' 帧 · tick ' + r;
+    }
+  }
+  void document.body.offsetHeight;
+  var ms = performance.now() - t0;
+  if (bridge) bridge.report('text', ms);
+  return ms;
+}
+
+function burstSwitch(rounds) {
+  var t0 = performance.now();
+  for (var r = 0; r < rounds; r++) {
+    var on = (r % 2 === 1);
+    for (var i = 0; i < cards.length; i++) {
+      var sw = cards[i].querySelector('.sw');
+      if (on) sw.classList.add('on'); else sw.classList.remove('on');
+    }
+  }
+  void document.body.offsetHeight;
+  var ms = performance.now() - t0;
+  if (bridge) bridge.report('switch', ms);
+  return ms;
+}
+</script>
+</body>
+</html>

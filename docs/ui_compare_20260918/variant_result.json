@@ -1,0 +1,38 @@
+[
+ {
+  "variant": "setHtml",
+  "target": "<!DOCTYPE html><html><body><h1>hello</h1></body></html>",
+  "finished": true,
+  "ok": true,
+  "elapsed_ms": 226.2,
+  "progress_max": 100,
+  "has_qt": false
+ },
+ {
+  "variant": "setHtml",
+  "target": "<inline>",
+  "finished": true,
+  "ok": true,
+  "elapsed_ms": 86.5,
+  "progress_max": 100,
+  "has_qt": false
+ },
+ {
+  "variant": "file",
+  "target": "<inline>",
+  "finished": true,
+  "ok": true,
+  "elapsed_ms": 423.6,
+  "progress_max": 100,
+  "has_qt": false
+ },
+ {
+  "variant": "file",
+  "target": "<inline>",
+  "finished": true,
+  "ok": true,
+  "elapsed_ms": 64.2,
+  "progress_max": 100,
+  "has_qt": null
+ }
+]

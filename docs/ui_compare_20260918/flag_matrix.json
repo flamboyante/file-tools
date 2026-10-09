@@ -1,0 +1,50 @@
+[
+ {
+  "combo": "baseline",
+  "flags": "(none)",
+  "status": "TIMEOUT",
+  "wall_ms": 40284.8
+ },
+ {
+  "combo": "disable-gpu",
+  "flags": "--disable-gpu",
+  "status": "TIMEOUT",
+  "wall_ms": 41082.3
+ },
+ {
+  "combo": "no-sandbox",
+  "flags": "--no-sandbox",
+  "status": "TIMEOUT",
+  "wall_ms": 41083.3
+ },
+ {
+  "combo": "gpu+nosandbox",
+  "flags": "--disable-gpu --no-sandbox",
+  "status": "TIMEOUT",
+  "wall_ms": 41117.7
+ },
+ {
+  "combo": "single-process",
+  "flags": "--single-process",
+  "status": "TIMEOUT",
+  "wall_ms": 41105.1
+ },
+ {
+  "combo": "gpu+nosandbox+single",
+  "flags": "--disable-gpu --no-sandbox --single-process",
+  "status": "TIMEOUT",
+  "wall_ms": 41100.5
+ },
+ {
+  "combo": "in-process-gpu",
+  "flags": "--disable-gpu --in-process-gpu --no-sandbox",
+  "status": "TIMEOUT",
+  "wall_ms": 41103.4
+ },
+ {
+  "combo": "sw-raster-off",
+  "flags": "--disable-gpu --disable-software-rasterizer --no-sandbox",
+  "status": "TIMEOUT",
+  "wall_ms": 41127.3
+ }
+]

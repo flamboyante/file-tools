@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>B 方案 · 同内容对照</title>
+<!-- 本页 CSS 直接摘自 docs/ui_mockup/ui_mockup_final_bubbles.html 的原始设计令牌与规则，
+     只是把内容裁成与 A 方案渲染器完全相同的 5 张卡片，保证同内容可比。 -->
+<style>
+  :root{
+    --bg:#eef2f9; --panel:#ffffff; --panel2:#f8fafd; --line:#e2e8f2;
+    --text:#1d2633; --muted:#7c8798; --accent:#2f6fed; --accent-soft:#e9f0ff;
+    --green:#0e9f6e; --green-soft:#e5f6ef; --red:#e5484d; --red-soft:#fdeaea;
+    --orange:#f29400; --orange-soft:#fdf2dd; --gray-soft:#eef1f6;
+    --blue:#2f6fed; --blue-soft:#e9f0ff; --purple:#8b5cf6; --purple-soft:#f0eafd;
+    --shadow:0 1px 3px rgba(20,40,80,.08),0 4px 14px rgba(20,40,80,.06);
+    --shadow-sm:0 1px 2px rgba(20,40,80,.06);
+    --mono:"Cascadia Code","Consolas",monospace;
+  }
+  .dark{
+    --bg:#0d1117; --panel:#161c26; --panel2:#1b2330; --line:#263141;
+    --text:#e8edf5; --muted:#8d99a8; --accent:#4c8dff; --accent-soft:#1b2a47;
+    --green:#2fc48a; --green-soft:#0f2e22; --red:#f2555a; --red-soft:#3a1a1d;
+    --orange:#f6b64a; --orange-soft:#32260d; --gray-soft:#222b38;
+    --blue:#4c8dff; --blue-soft:#1b2a47; --purple:#a78bfa; --purple-soft:#2b2044;
+    --shadow:0 1px 3px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.3);
+    --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+       background:var(--bg);color:var(--text);font-size:13px;line-height:1.45;padding:18px}
+  .head{font-size:17px;font-weight:700;letter-spacing:.2px;margin-bottom:14px}
+  .cmdbar{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+          box-shadow:var(--shadow-sm);margin-bottom:10px;overflow:hidden;
+          transition:all .15s;cursor:pointer;position:relative}
+  .cmdbar:hover{border-color:var(--accent);box-shadow:var(--shadow);transform:translateY(-1px)}
+  .cmdbar.running-on{background:linear-gradient(90deg,
+      color-mix(in srgb,var(--accent-soft) 60%,var(--panel)) 0%,var(--panel) 55%)}
+  .cmdbar-inner{display:flex;align-items:center;gap:14px;padding:11px 16px;flex-wrap:wrap}
+  .cmd-ch{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;
+          justify-content:center;font-weight:800;font-size:14px;color:#fff;
+          flex-shrink:0;box-shadow:var(--shadow-sm)}
+  .cmd-ch.a{background:linear-gradient(135deg,#4c8dff,#2f6fed)}
+  .cmd-ch.b{background:linear-gradient(135deg,#a78bfa,#8b5cf6)}
+  .cmd-name{font-weight:700;font-size:13.5px;min-width:130px;flex:1}
+  .cmd-name .sub{display:block;font-weight:400;font-size:10.5px;color:var(--muted);margin-top:1px}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:4px 11px;
+        border-radius:99px;background:var(--gray-soft);color:var(--muted);
+        white-space:nowrap;border:1px solid transparent}
+  .chip b{color:var(--text);font-family:var(--mono)}
+  .badge{font-size:10.5px;padding:3px 10px;border-radius:99px;font-weight:600;white-space:nowrap}
+  .badge.ok{background:var(--green-soft);color:var(--green)}
+  .badge.err{background:var(--red-soft);color:var(--red)}
+  .badge.pend{background:var(--orange-soft);color:var(--orange)}
+  .badge.gray{background:var(--gray-soft);color:var(--muted)}
+  .badge.run{background:var(--accent-soft);color:var(--accent)}
+  .switch{position:relative;width:34px;height:18px;background:var(--gray-soft);
+          border:1px solid var(--line);border-radius:99px;display:inline-block;
+          flex-shrink:0;transition:all .2s;cursor:pointer}
+  .switch:after{content:"";position:absolute;width:12px;height:12px;background:#fff;
+          border-radius:50%;top:2px;left:3px;transition:all .2s;
+          box-shadow:0 1px 2px rgba(0,0,0,.3)}
+  .switch.on{background:var(--green);border-color:transparent}
+  .switch.on:after{left:18px}
+  .chev{color:var(--muted);font-size:11px;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="head">WebEngine 同内容对照</div>
+
+<div class="cmdbar running-on">
+  <div class="cmdbar-inner">
+    <div class="cmd-ch a">A</div>
+    <div class="cmd-name">快遥 FAST<span class="sub">ch=A · 无限次 · 500ms</span></div>
+    <span class="chip">间隔 500ms</span><span class="chip">1 帧</span>
+    <span class="chip">IRCode 00 5A</span>
+    <span class="badge run">运行中</span>
+    <span class="switch on"></span><span class="chev">▾</span>
+  </div>
+</div>
+
+<div class="cmdbar">
+  <div class="cmdbar-inner">
+    <div class="cmd-ch a">A</div>
+    <div class="cmd-name">慢遥 SLOW1<span class="sub">ch=A · 无限次 · 500ms</span></div>
+    <span class="chip">间隔 500ms</span><span class="chip">1 帧</span>
+    <span class="chip">IRCode 00 AA</span>
+    <span class="badge gray">已停止</span>
+    <span class="switch"></span><span class="chev">▾</span>
+  </div>
+</div>
+
+<div class="cmdbar">
+  <div class="cmdbar-inner">
+    <div class="cmd-ch a">A</div>
+    <div class="cmd-name">星敏感器 STAR<span class="sub">ch=A · 无限次 · 100ms</span></div>
+    <span class="chip">间隔 100ms</span><span class="chip">5 帧</span>
+    <span class="chip">ID 0x1E160000</span>
+    <span class="badge pend">待发送</span>
+    <span class="switch"></span><span class="chev">▾</span>
+  </div>
+</div>
+
+<div class="cmdbar">
+  <div class="cmdbar-inner">
+    <div class="cmd-ch b">B</div>
+    <div class="cmd-name">BUS 总线帧<span class="sub">ch=B · 无限次 · 500ms</span></div>
+    <span class="chip">间隔 500ms</span><span class="chip">1 帧</span>
+    <span class="chip">IRCode 00 25 25</span>
+    <span class="badge gray">已停止</span>
+    <span class="switch"></span><span class="chev">▾</span>
+  </div>
+</div>
+
+<div class="cmdbar">
+  <div class="cmdbar-inner">
+    <div class="cmd-ch b">B</div>
+    <div class="cmd-name">姿态 ATTITUDE<span class="sub">ch=B · 无限次 · 500ms</span></div>
+    <span class="chip">间隔 500ms</span><span class="chip">6 帧</span>
+    <span class="chip">ID 0x1E2E0000</span>
+    <span class="badge err">失败</span>
+    <span class="switch"></span><span class="chev">▾</span>
+  </div>
+</div>
+
+</body>
+</html>
